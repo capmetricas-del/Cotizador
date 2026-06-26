@@ -196,7 +196,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <div>
     <h1>CAP Logistic · Cotizador</h1>
-    <div class="sub">v2.10 · offline</div>
+    <div class="sub">v3.0 · offline</div>
   </div>
   <div class="hdr-acts">
     <div id="login-user-bar">
@@ -402,14 +402,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="fg"><label>T/C PEN→USD</label>
             <input id="s_tc" class="iy" type="number" value="3.75" step="0.01" oninput="recalc()"></div>
         </div>
-        <div class="fr3">
-          <div class="fg"><label>IGV %</label>
-            <input id="s_igv" class="iy" type="number" value="18" step="0.1" oninput="recalc()"></div>
-          <div class="fg"><label>Margen obj %</label>
-            <input id="s_mobj" class="iy" type="number" value="15" step="0.5" oninput="recalc()"></div>
-          <div class="fg"><label>Mg. Gerencia %</label>
-            <input id="s_mger" class="iy" type="number" value="10" step="0.5" oninput="recalc()"></div>
-        </div>
         <div class="fr">
           <div class="fg"><label>¿Crédito?</label>
             <select id="s_cred" onchange="recalc()">
@@ -490,28 +482,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <table class="rt" id="rtable" style="display:none">
             <thead><tr>
               <th>#</th><th style="text-align:left">Concepto</th><th>Fact.</th><th>Tipo</th>
-              <th>Qty</th><th>Mon</th><th>Costo U.</th>
-              <th>Neto Costo</th><th>Mg%</th><th>Precio Venta</th><th>Estado</th>
+              <th>Qty</th><th>Mon</th><th>Costo Unitario</th>
+              <th>Neto Costo (C.U×Q)</th><th>Costo Incluido</th>
             </tr></thead>
             <tbody id="rt_body"></tbody>
             <tfoot id="rt_foot"></tfoot>
           </table>
         </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="ch">📈 Neto Considerando</div>
-      <div class="cb" style="padding:8px">
-        <table class="nt">
-          <thead><tr>
-            <th>Tipo de Gasto</th>
-            <th class="r">Neto Costo $</th>
-            <th class="r">Precio Venta $</th>
-            <th class="r">Margen</th>
-          </tr></thead>
-          <tbody id="nt_body"></tbody>
-        </table>
       </div>
     </div>
 
@@ -667,6 +644,25 @@ let TKG=[
   {a:6001,b:7000, 'ZONA 1':530,'ZONA 2':670,'ZONA 3':680,'ZONA 4':760,'ZONA 4 II':800},
   {a:7001,b:99999,'ZONA 1':610,'ZONA 2':690,'ZONA 3':710,'ZONA 4':780,'ZONA 4 II':830},
 ];
+// IGV_MAP: true = aplica IGV 18% (concepto local Perú), false = exonerado/internacional
+// Se actualiza automáticamente desde la columna IGV del tab GASTOS LOCALES del Drive
+const IGV_MAP = {
+  // Locales con IGV
+  'Gate Out':true, 'Gate in':true, 'Gate In':true,
+  'Visto Bueno':true, 'Visto Bueno BL':true, 'Visto Bueno Contenedor':true,
+  'Storage':true,
+  'Handling aerolinea':true, 'Handling aerolínea':true,
+  'Inspeccion fisica':true, 'Inspección física':true,
+  'Doc Fee':true, 'Documentation Fee':true,
+  'Transfer':true, 'Recojo':true, 'Entrega':true,
+  'Resguardo':true, 'Customs clearance':true,
+  'THC':true, 'OTHC':true, 'DTHC':true,
+  // Internacionales sin IGV
+  'Ocean Freight':false, 'Flete Aereo y Gastos':false, 'Flete Aéreo y Gastos':false,
+  'Handling':false, 'Transmision':false, 'Transmisión':false,
+  'Costo financiero':false,
+};
+
 let REGLAS={mOk:0.15,mGer:0.10,trU:1000,trA:125,trB:75,
             adP:0.0025,adFI:20,adFE:90,adMI:70};
 const INC_MAP={Maritimo:['EXW','FCA','FOB','DDU','DAP'],Aereo:['EXW','FCA','DDU','DAP']};
@@ -941,8 +937,6 @@ function getCosto(cc, s){
 // ══════════════════════════════════════════════
 function recalc(){
   const tc = gn('s_tc') || 3.75;
-  const mObj = gn('s_mobj')/100 || 0.15;
-  const mGer = gn('s_mger')/100 || 0.10;
   const tU   = gn('t_tumbl') || 1000;
   const s = {
     op:   gv('s_op'),
@@ -963,8 +957,8 @@ function recalc(){
     tip:  gv('s_tip_transp'),
     mont: gv('s_mon_t'),
     dep:  gv('s_dep'),
-    tc, mObj, mGer, tU,
-    igv:  gn('s_igv')/100,
+    tc, tU,
+    igv:  0.18,
     stL:  gn('s_st_lcl'),
     stA:  gn('s_st_ae'),
     rsg:  gn('s_rsg'),
@@ -983,7 +977,6 @@ function recalc(){
   if(!cList.length){
     alertEl.style.display='block';
     rtableEl.style.display='none';
-    renderNeto([],s);
     return;
   }
   alertEl.style.display='none';
@@ -1006,19 +999,11 @@ function recalc(){
       fijo:true,vFija:trCost,sVenta:false,manual:false}});
   }
 
-  // Pasada 2: precio venta y margen
+  // Armar filas finales con IGV
   const final = rows.map(({ci,comp},idx)=>{
-    let pv, mg, est;
-    if(comp.sVenta){
-      pv=comp.vFija||0; mg=1; est='PRECIO FIJO';
-    } else if(comp.fijo){
-      pv=comp.vFija!=null?comp.vFija:comp.neto; mg=0; est='PRECIO FIJO';
-    } else {
-      pv = mObj>=1 ? comp.neto+mObj : comp.neto/(1-mObj);
-      mg = pv>0?(pv-comp.neto)/pv:0;
-      est = mg>=mObj ? '✓ APROBADO' : mg>=mGer ? '⚠ GERENCIA' : '✗ BLOQUEAR';
-    }
-    return {n:idx+1, ci, comp, pv, mg, est};
+    const tieneIGV = IGV_MAP.hasOwnProperty(ci.c) ? IGV_MAP[ci.c] : false;
+    const costoIncluido = comp.neto * (tieneIGV ? 1.18 : 1);
+    return {n:idx+1, ci, comp, tieneIGV, costoIncluido};
   });
 
   // Costo financiero
@@ -1027,16 +1012,18 @@ function recalc(){
     const rate = rates[s.dias]||0.015;
     const base = final.reduce((a,r)=>a+r.comp.neto,0);
     const fin  = base*rate;
-    if(fin>0) final.push({
-      n:final.length+1,
-      ci:{c:'Costo financiero',f:'Agente',t:'Financiamiento'},
-      comp:{cu:fin,qty:1,mon:'USD',cuUSD:fin,neto:fin,fijo:false,vFija:null,sVenta:false,manual:false},
-      pv:0, mg:0, est:'COSTO INTERNO', esF:true,
-    });
+    if(fin>0){
+      const finCI={c:'Costo financiero',f:'Agente',t:'Financiamiento'};
+      final.push({
+        n:final.length+1,
+        ci:finCI,
+        comp:{cu:fin,qty:1,mon:'USD',cuUSD:fin,neto:fin,fijo:false,vFija:null,sVenta:false,manual:false},
+        tieneIGV:false, costoIncluido:fin, esF:true,
+      });
+    }
   }
 
   renderTable(final,s);
-  renderNeto(final,s);
   document.getElementById('tc_badge').textContent = final.length;
 }
 
@@ -1058,7 +1045,7 @@ function renderTable(rows,s){
   tb.innerHTML=''; tf.innerHTML='';
 
   rows.forEach(r=>{
-    const{comp,ci,pv,mg,est,esF}=r;
+    const{comp,ci,tieneIGV,costoIncluido,esF}=r;
     const tr=document.createElement('tr');
     if(esF) tr.className='srow';
     else if(ci.f==='Shipper') tr.className='shrow';
@@ -1067,6 +1054,7 @@ function renderTable(rows,s){
       ? `S/${f2(comp.cu)}<br><small style="color:var(--mu)">≈$ ${f2(comp.cuUSD)}</small>`
       : `$ ${f2(comp.cu)}`;
     const warnStr = comp.manual ? `<br><small style="color:var(--warn)">⚠ sin tarifa</small>`:'';
+    const igvTag = tieneIGV ? `<br><small style="color:var(--ok);font-size:10px">+IGV 18%</small>`:'';
 
     tr.innerHTML=`
       <td style="text-align:center;color:var(--mu);font-size:11px">${r.n}</td>
@@ -1077,70 +1065,33 @@ function renderTable(rows,s){
       <td style="text-align:center;font-size:11px">${comp.mon}</td>
       <td class="num">${monStr}</td>
       <td class="num"><b>$ ${f2(comp.neto)}</b></td>
-      <td class="num">${(comp.sVenta||comp.fijo||esF)?'—':pct(mg)}</td>
-      <td class="num"><b>$ ${f2(pv)}</b></td>
-      <td>${estHtml(est)}</td>`;
+      <td class="num"><b>$ ${f2(costoIncluido)}</b>${igvTag}</td>`;
     tb.appendChild(tr);
   });
 
   // Fila totales
-  const agR = rows.filter(r=>r.ci.f!=='Shipper'&&!r.esF);
-  const fR  = rows.find(r=>r.esF);
-  const tC  = agR.reduce((a,r)=>a+r.comp.neto,0) + (fR?fR.comp.neto:0);
-  const tV  = agR.reduce((a,r)=>a+r.pv,0);
-  const tM  = tV>0?(tV-tC)/tV:0;
-  const tE  = tM>=s.mObj?'✓ APROBADO':tM>=s.mGer?'⚠ GERENCIA':'✗ BLOQUEAR';
+  const visR = rows.filter(r=>r.ci.f!=='Shipper');
+  const tNeto = visR.reduce((a,r)=>a+r.comp.neto,0);
+  const tIncl = visR.reduce((a,r)=>a+r.costoIncluido,0);
   const tr  = document.createElement('tr');
   tr.className='trow';
   tr.innerHTML=`<td colspan="7" style="text-align:right">TOTALES</td>
-    <td class="num">$ ${f2(tC)}</td>
-    <td class="num">${pct(tM)}</td>
-    <td class="num">$ ${f2(tV)}</td>
-    <td>${estHtml(tE)}</td>`;
+    <td class="num">$ ${f2(tNeto)}</td>
+    <td class="num">$ ${f2(tIncl)}</td>`;
   tf.appendChild(tr);
 
   // Pills resumen
   const pillsEl = document.getElementById('pills');
   pillsEl.style.display='flex';
   pillsEl.innerHTML=`
-    <div class="pill"><div class="pl">Neto Costo</div><div class="pv">$ ${f2(tC)}</div></div>
-    <div class="pill"><div class="pl">Precio Venta</div><div class="pv">$ ${f2(tV)}</div></div>
-    <div class="pill"><div class="pl">Margen</div><div class="pv">${pct(tM)}</div>
-      <div style="font-size:11px">${estHtml(tE)}</div></div>`;
+    <div class="pill"><div class="pl">Neto Costo</div><div class="pv">$ ${f2(tNeto)}</div></div>
+    <div class="pill"><div class="pl">Costo Incluido (c/IGV)</div><div class="pv">$ ${f2(tIncl)}</div></div>`;
 }
 
-function renderNeto(rows,s){
-  const CATS=['Origen','Internacional','Destino','Local','Aduanas','Financiamiento'];
-  const tb=document.getElementById('nt_body');
-  tb.innerHTML='';
-  let gC=0, gV=0;
-  CATS.forEach(cat=>{
-    const cr=rows.filter(r=>r.ci.t===cat&&r.ci.f!=='Shipper');
-    if(!cr.length) return;
-    const c=cr.reduce((a,r)=>a+r.comp.neto,0);
-    const v=cr.reduce((a,r)=>a+r.pv,0);
-    const m=v>0?(v-c)/v:0;
-    gC+=c; gV+=v;
-    const tr=document.createElement('tr');
-    tr.className=cat==='Financiamiento'?'fr2':'cr';
-    tr.innerHTML=`<td>${badge(cat)} ${cat}</td>
-      <td class="r">$ ${f2(c)}</td>
-      <td class="r">$ ${f2(v)}</td>
-      <td class="r">${cat==='Financiamiento'?'SOLO COSTO':pct(m)}</td>`;
-    tb.appendChild(tr);
-  });
-  const gM=gV>0?(gV-gC)/gV:0;
-  const tr=document.createElement('tr');
-  tr.className='tr2';
-  tr.innerHTML=`<td>⭐ TOTAL NETO</td>
-    <td class="r">$ ${f2(gC)}</td>
-    <td class="r">$ ${f2(gV)}</td>
-    <td class="r">${pct(gM)}</td>`;
-  tb.appendChild(tr);
-}
+function renderNeto(){}
 
 function exportCSV(){
-  const h=['#','Concepto','Factura','Tipo','Qty','Mon','Costo U','Neto Costo','Mg%','Precio Venta','Estado'];
+  const h=['#','Concepto','Factura','Tipo','Qty','Mon','Costo Unitario','Neto Costo (C.U×Q)','Costo Incluido'];
   const rows=[h.join(',')];
   document.querySelectorAll('#rt_body tr').forEach(tr=>{
     const cells=Array.from(tr.querySelectorAll('td')).map(td=>`"${td.textContent.replace(/"/g,'""').trim()}"`);
