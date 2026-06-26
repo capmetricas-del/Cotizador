@@ -1189,6 +1189,8 @@ function iaStatus(msg, bg, color){
 async function analizarImagen(){
   const key = (document.getElementById('ia_key')||{}).value || localStorage.getItem('cap_ia_key') || '';
   if(!key||key.length<20){ iaStatus('⚠️ Ingresa tu API Key de OpenAI y guárdala con 💾','#fff3e0','#bf360c'); return; }
+  // Test de conectividad rápido
+  if(!navigator.onLine){ iaStatus('⚠️ Sin internet — conecta tu red e intenta de nuevo.','#fff3e0','#bf360c'); return; }
   if(!_iaB64){ iaStatus('⚠️ Selecciona una imagen primero.','#fff3e0','#bf360c'); return; }
 
   const btn = document.getElementById('ia_btn');
@@ -1304,7 +1306,11 @@ Devuelve SOLO JSON válido, sin markdown ni comentarios:
         body: JSON.stringify({model:'gpt-4o',messages,max_tokens:500,temperature:0})
       });
     } catch(netErr){
-      throw new Error('Sin conexión a internet o el navegador bloqueó la solicitud. Abre el archivo desde un servidor local (no como file://).');
+      const isFile = location.protocol==='file:';
+      const hint = isFile
+        ? 'Estás abriendo el archivo como file:// — usa Abrir_Cotizador.command.'
+        : 'Verifica tu conexión a internet. Detalle: '+netErr.message;
+      throw new Error(hint);
     }
     if(!resp.ok){
       let errMsg = resp.statusText;
