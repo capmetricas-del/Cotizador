@@ -196,7 +196,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <div>
     <h1>CAP Logistic · Cotizador</h1>
-    <div class="sub">v2.7 · offline</div>
+    <div class="sub">v2.8 · offline</div>
   </div>
   <div class="hdr-acts">
     <div id="login-user-bar">
@@ -523,9 +523,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <script>
 // ══════════════════════════════════════════════
-// DATOS
+// DATOS — valores por defecto (fallback offline)
+// En producción estos se reemplazan al cargar
+// desde Google Drive (loadTarifasFromDrive).
 // ══════════════════════════════════════════════
-const THC_VB=[
+let THC_VB=[
   {r:'Importacion',n:'CMA - CGM',    c:'THC',t:64.9},
   {r:'Importacion',n:'CMA - CGM',    c:'Visto Bueno BL',t:28.125},
   {r:'Importacion',n:'CMA - CGM',    c:'Visto Bueno Contenedor',t:225},
@@ -592,7 +594,7 @@ const THC_VB=[
   {r:'Exportacion',n:'YANG MING',    c:'Visto Bueno BL',t:100},
   {r:'Exportacion',n:'YANG MING',    c:'Visto Bueno Contenedor',t:220},
 ];
-const CARGOS_NAV=[
+let CARGOS_NAV=[
   {r:'Importacion',n:'CMA - CGM',    c:'Gate in',t:205},
   {r:'Exportacion',n:'CMA - CGM',    c:'Gate Out',t:150},
   {r:'Importacion',n:'COSCO / OOCL', c:'Gate in',t:197.5},
@@ -617,18 +619,18 @@ const CARGOS_NAV=[
   {r:'Exportacion',n:'YANG MING',    c:'Gate Out',t:135},
   {r:'Importacion',n:'HAPAG LLOYD',  c:'Doc Fee',t:60},
 ];
-const STORAGE={
+let STORAGE={
   APM:{'20ST':{I:335,E:245},'40ST':{I:490,E:376},'40HC':{I:513,E:399}},
   DPW:{'20ST':{I:280,E:240},'40ST':{I:390,E:350},'40HC':{I:417,E:377}},
   DT: {'20ST':{I:366,E:342},'40ST':{I:505,E:460},'40HC':{I:532,E:487}},
 };
-const FLETE_MAR=[
+let FLETE_MAR=[
   {ori:'Callao',des:'Buenaventura',nav:'MAERSK',t:400},
 ];
-const FLETE_AER=[
+let FLETE_AER=[
   {ori:'Lima',des:'Bogota',tKg:0.58,min:200},
 ];
-const ZONAS={
+let ZONAS={
   'CALLAO CERCADO':'ZONA 1','LA PUNTA':'ZONA 1','BELLAVISTA':'ZONA 1','LA PERLA':'ZONA 1',
   'SAN MIGUEL':'ZONA 1','CARMEN DE LEGUA':'ZONA 1',
   'VENTANILLA':'ZONA 2','SAN MARTIN DE PORRES':'ZONA 2','LOS OLIVOS':'ZONA 2',
@@ -645,11 +647,11 @@ const ZONAS={
   'HUACHIPA':'ZONA 4 II','LURIN':'ZONA 4 II','CAJAMARQUILLA':'ZONA 4 II',
   'CIENEGUILLA':'ZONA 4 II','CHOSICA':'ZONA 4 II','VILLA EL SALVADOR':'ZONA 4 II',
 };
-const TCNT={
+let TCNT={
   'CNT 20':{'ZONA 1':800,'ZONA 2':900,'ZONA 3':1000,'ZONA 4':1150,'ZONA 4 II':1350},
   'CNT 40':{'ZONA 1':800,'ZONA 2':900,'ZONA 3':1000,'ZONA 4':1150,'ZONA 4 II':1350},
 };
-const TKG=[
+let TKG=[
   {a:1,   b:50,   'ZONA 1':240,'ZONA 2':270,'ZONA 3':290,'ZONA 4':310,'ZONA 4 II':330},
   {a:51,  b:100,  'ZONA 1':250,'ZONA 2':280,'ZONA 3':310,'ZONA 4':330,'ZONA 4 II':350},
   {a:101, b:200,  'ZONA 1':280,'ZONA 2':310,'ZONA 3':330,'ZONA 4':360,'ZONA 4 II':390},
@@ -665,8 +667,8 @@ const TKG=[
   {a:6001,b:7000, 'ZONA 1':530,'ZONA 2':670,'ZONA 3':680,'ZONA 4':760,'ZONA 4 II':800},
   {a:7001,b:99999,'ZONA 1':610,'ZONA 2':690,'ZONA 3':710,'ZONA 4':780,'ZONA 4 II':830},
 ];
-const REGLAS={mOk:0.15,mGer:0.10,trU:1000,trA:125,trB:75,
-              adP:0.0025,adFI:20,adFE:90,adMI:70};
+let REGLAS={mOk:0.15,mGer:0.10,trU:1000,trA:125,trB:75,
+            adP:0.0025,adFI:20,adFE:90,adMI:70};
 const INC_MAP={Maritimo:['EXW','FCA','FOB','DDU','DAP'],Aereo:['EXW','FCA','DDU','DAP']};
 const CI=[
   {m:'Maritimo',i:'EXW',v:'Base',o:1, c:'Recojo',            f:'Agente',t:'Origen'},
@@ -1520,10 +1522,21 @@ document.addEventListener('DOMContentLoaded',()=>{
 const AUTH_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw8FPbC6pBVcoEziP6WqzsXbNbvS39KE_RDJHfHvDsm1ezqbCgpXT1T7UrdhHpmZzy3/exec';
 // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-// ── Google Sheets: base de costos ──────────────
-const SHEETS_ID  = '1g3ttZiu0njO_nZVDetw1ywsAY1EtsYc8E7CefRAt7Hc';
-const SHEETS_GID = '1648325272';
-// ───────────────────────────────────────────────
+// ── Google Sheets: base de costos ──────────────────────────────────────
+// Para obtener el GID de cada pestaña: click en la pestaña → la URL
+// muestra #gid=XXXXXXX al final.  Pegar ese número aquí.
+// La hoja DEBE ser "Cualquier persona con el enlace puede ver".
+// ───────────────────────────────────────────────────────────────────────
+const SHEETS_ID = '1qrwaOj1W738V1EyqzxrfXDUlicsEe6HEg4FzvulGtZQ';
+const SHEETS_TABS = {
+  TRANSPORTE_LOCAL : '958886659',     // ← ya configurado
+  THC_VB           : '9793601',    // ← pestaña "THC VB"
+  CARGOS_NAVIERA   : '379243276',    // ← pestaña "CARGOS NAVIERA"
+  FLETE_MARITIMO   : '456102879',    // ← pestaña "FLETE MARITIMO"
+  FLETE_AEREO      : '1779115188',    // ← pestaña "FLETE AEREO"
+  GASTOS_LOCALES   : '1114582596',    // ← pestaña "GASTOS LOCALES"
+};
+// ───────────────────────────────────────────────────────────────────────
 
 const SESSION_KEY = 'cap_auth_session';
 
@@ -1625,95 +1638,338 @@ function showKeyMsg(msg, color){
   setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; }, 3500);
 }
 
-// GOOGLE SHEETS — Carga de tarifas desde Drive
 // ══════════════════════════════════════════════
-async function loadTarifasFromDrive(silent){
-  const url = `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/export?format=csv&gid=${SHEETS_GID}`;
-  const btn = document.getElementById('sheet_btn');
-  if(btn){ btn.textContent='⏳ Cargando...'; btn.disabled=true; }
-  try{
-    const resp = await fetch(url);
-    if(!resp.ok) throw new Error(`HTTP ${resp.status} — ¿Hoja pública?`);
-    const text = await resp.text();
-    if(!text||text.length<10) throw new Error('Respuesta vacía — verifica acceso público');
-    parseTarifasCSV(text);
-    showSheetStatus('✓ Tarifas actualizadas desde Drive','#27ae60');
-    localStorage.setItem('cap_tarifas_cache', text);
-    localStorage.setItem('cap_tarifas_ts', Date.now());
-  }catch(e){
-    // Intentar caché
-    const cached = localStorage.getItem('cap_tarifas_cache');
-    if(cached && !silent){
-      parseTarifasCSV(cached);
-      const ts = localStorage.getItem('cap_tarifas_ts');
-      const age = ts ? Math.round((Date.now()-+ts)/3600000)+'h' : '?';
-      showSheetStatus(`⚠️ Sin conexión — usando caché (${age} atrás)`,'#e67e22');
-    } else if(!silent){
-      showSheetStatus('⚠️ '+e.message+' — usando tarifas locales','#e67e22');
+// GOOGLE SHEETS — Carga multi-pestaña desde Drive
+// ══════════════════════════════════════════════
+
+// Parsea CSV en filas/columnas (maneja comillas, \r)
+function _csvRows(csv){
+  return csv.split('\n').map(r=>{
+    const cols=[]; let cur='', inQ=false;
+    for(let ch of r){
+      if(ch==='"') inQ=!inQ;
+      else if(ch===','&&!inQ){ cols.push(cur.trim().replace(/\r/g,'')); cur=''; }
+      else cur+=ch;
     }
-  }finally{
-    if(btn){ btn.textContent='🔄 Actualizar desde Drive'; btn.disabled=false; }
+    cols.push(cur.trim().replace(/\r/g,''));
+    return cols;
+  }).filter(r=>r.some(c=>c));
+}
+
+// Parsea número en formato español: "1.150"→1150, "64,90"→64.9
+function _pn(s){
+  if(!s||s==='N/A'||s==='-'||s==='—') return 0;
+  const c=s.replace(/[€$\s]/g,'');
+  if(c.includes(',')&&c.includes('.')) return parseFloat(c.replace(/\./g,'').replace(',','.'))||0;
+  if(c.includes(','))                  return parseFloat(c.replace(',','.'))||0;
+  // Solo punto: si 3 decimales → miles; si ≤2 decimales → decimal
+  const di=c.lastIndexOf('.');
+  if(di>=0&&c.length-di-1===3)       return parseFloat(c.replace(/\./g,''))||0;
+  return parseFloat(c)||0;
+}
+
+// ── Parsers específicos por pestaña ────────────────────────────────────
+
+function _parseThcVb(csv){
+  // Columnas: A=Llave | B=Régimen | C=Naviera | D=Concepto | E=TipoCobro | F=Tarifa
+  const rows=_csvRows(csv); const newTHC=[], newNAV=[];
+  for(const row of rows){
+    const reg=(row[1]||'').trim(), nav=(row[2]||'').trim(),
+          con=(row[3]||'').trim(), tar=_pn(row[5]);
+    if(!reg||!nav||!con) continue;
+    if(['Importacion','Exportacion'].indexOf(reg)<0) continue;
+    const obj={r:reg,n:nav,c:con,t:tar};
+    const isNav=con.startsWith('Gate')||con==='Doc Fee';
+    if(isNav) newNAV.push(obj); else newTHC.push(obj);
+  }
+  if(newTHC.length>0) THC_VB.splice(0,THC_VB.length,...newTHC);
+  if(newNAV.length>0) CARGOS_NAV.splice(0,CARGOS_NAV.length,...newNAV);
+}
+
+function _parseCargosNaviera(csv){
+  // Misma estructura que THC VB pero solo cargos locales (Gate In/Out, Doc Fee, Resguardo)
+  const rows=_csvRows(csv); const newNAV=[];
+  for(const row of rows){
+    const reg=(row[1]||'').trim(), nav=(row[2]||'').trim(),
+          con=(row[3]||'').trim(), tar=_pn(row[5]);
+    if(!reg||!nav||!con) continue;
+    if(['Importacion','Exportacion'].indexOf(reg)<0) continue;
+    newNAV.push({r:reg,n:nav,c:con,t:tar});
+  }
+  if(newNAV.length>0) CARGOS_NAV.splice(0,CARGOS_NAV.length,...newNAV);
+}
+
+function _parseFleteMar(csv){
+  // Columnas: A=Llave | B=Origen | C=Destino | D=Naviera | E=TipoCNT | F=Moneda | G=Costo
+  const rows=_csvRows(csv); const newFM=[];
+  let past=false;
+  for(const row of rows){
+    if(!past){ if((row[1]||'').toLowerCase()==='origen') past=true; continue; }
+    const ori=(row[1]||'').trim(), des=(row[2]||'').trim(),
+          nav=(row[3]||'').trim(), tar=_pn(row[6]);
+    if(ori&&des) newFM.push({ori,des,nav,t:tar});
+  }
+  if(newFM.length>0) FLETE_MAR.splice(0,FLETE_MAR.length,...newFM);
+}
+
+function _parseFleteAer(csv){
+  // Columnas: A=Llave | B=Origen | C=Destino | D=Aerolínea | E=Tarifa/KG | F=Mínimo
+  const rows=_csvRows(csv); const newFA=[];
+  let past=false;
+  for(const row of rows){
+    if(!past){ if((row[1]||'').toLowerCase()==='origen') past=true; continue; }
+    const ori=(row[1]||'').trim(), des=(row[2]||'').trim(),
+          tKg=_pn(row[4]), min=_pn(row[5]);
+    if(ori&&des) newFA.push({ori,des,tKg,min});
+  }
+  if(newFA.length>0) FLETE_AER.splice(0,FLETE_AER.length,...newFA);
+}
+
+function _parseTransporteLocal(csv){
+  // Columnas: A=TramoLabel | B=MinKG | C=MaxKG | D=Z1 | E=Z2 | F=Z3 | G=Z4 | H=Z4II | ... | J=Distrito | K=Zona
+  const rows=_csvRows(csv);
+  const newTCNT={}, newTKG=[], newZONAS={};
+  for(const row of rows){
+    const a=(row[0]||'').trim().toUpperCase();
+    const b=row[1]||'', c=row[2]||'';
+    // CNT row: A empieza con "CNT"
+    if(a.startsWith('CNT')&&a.length<=6){
+      if(!newTCNT[a]) newTCNT[a]={};
+      ['ZONA 1','ZONA 2','ZONA 3','ZONA 4','ZONA 4 II'].forEach((z,i)=>{
+        const v=_pn(row[3+i]); if(v>0) newTCNT[a][z]=v;
+      });
+    }
+    // TKG row: B y C son numéricos
+    else if(b&&!isNaN(parseFloat(b.replace(',','.')))&&parseFloat(b.replace(',','.')>0)){
+      const mn=_pn(b), mx=_pn(c)||99999;
+      const obj={a:mn,b:mx};
+      ['ZONA 1','ZONA 2','ZONA 3','ZONA 4','ZONA 4 II'].forEach((z,i)=>{
+        const v=_pn(row[3+i]); if(v>0) obj[z]=v;
+      });
+      if(Object.keys(obj).length>2) newTKG.push(obj);
+    }
+    // ZONA: columna J (índice 9) = distrito, K (índice 10) = zona
+    const dis=(row[9]||'').trim(), zon=(row[10]||'').trim();
+    if(dis&&zon&&zon.toUpperCase().startsWith('ZONA')) newZONAS[dis.toUpperCase()]=zon;
+  }
+  if(Object.keys(newTCNT).length>0){ Object.keys(TCNT).forEach(k=>delete TCNT[k]); Object.assign(TCNT,newTCNT); }
+  if(newTKG.length>0) TKG.splice(0,TKG.length,...newTKG);
+  if(Object.keys(newZONAS).length>0) Object.assign(ZONAS,newZONAS);
+}
+
+function _parseGastosLocales(csv){
+  // Columnas: A=Concepto | B=Desc | C=CostoNeto | ... | I=TarifaIMPO | J=TarifaEXPO
+  // Interesa: filas "Storage XYST DEP" → STORAGE[DEP][CNT][I/E]
+  const rows=_csvRows(csv);
+  const newSTO={};
+  for(const row of rows){
+    const con=(row[0]||'').trim();
+    // Detectar filas de Storage: "Storage 20ST APM", "Storage 40HC DPW", etc.
+    const m=con.match(/^Storage\s+(20ST|40ST|40HC)\s+(APM|DPW|DT)/i);
+    if(m){
+      const cnt=m[1].toUpperCase(), dep=m[2].toUpperCase();
+      const impo=_pn(row[8]), expo=_pn(row[9]);
+      if(!newSTO[dep]) newSTO[dep]={};
+      if(!newSTO[dep][cnt]) newSTO[dep][cnt]={};
+      if(impo>0) newSTO[dep][cnt]['I']=impo;
+      if(expo>0) newSTO[dep][cnt]['E']=expo;
+    }
+  }
+  if(Object.keys(newSTO).length>0){
+    Object.keys(newSTO).forEach(dep=>{
+      if(!STORAGE[dep]) STORAGE[dep]={};
+      Object.keys(newSTO[dep]).forEach(cnt=>{
+        if(!STORAGE[dep][cnt]) STORAGE[dep][cnt]={};
+        Object.assign(STORAGE[dep][cnt], newSTO[dep][cnt]);
+      });
+    });
   }
 }
 
+// ── Carga principal (multi-tab) ────────────────────────────────────────
+async function loadTarifasFromDrive(silent){
+  const btn=document.getElementById('sheet_btn');
+  if(btn){ btn.textContent='⏳ Cargando...'; btn.disabled=true; }
+  if(!silent) showSheetStatus('⏳ Sincronizando desde Drive...','#1a6faf');
+
+  const PARSERS={
+    THC_VB:          _parseThcVb,
+    CARGOS_NAVIERA:  _parseCargosNaviera,
+    FLETE_MARITIMO:  _parseFleteMar,
+    FLETE_AEREO:     _parseFleteAer,
+    TRANSPORTE_LOCAL:_parseTransporteLocal,
+    GASTOS_LOCALES:  _parseGastosLocales,
+  };
+
+  const tabs=Object.entries(SHEETS_TABS).filter(([,gid])=>gid&&!gid.includes('PEGAR'));
+  let loaded=0; const errs=[];
+
+  await Promise.all(tabs.map(async ([nombre,gid])=>{
+    const url=`https://docs.google.com/spreadsheets/d/${SHEETS_ID}/export?format=csv&gid=${gid}`;
+    try{
+      const resp=await fetch(url);
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const text=await resp.text();
+      if(!text||text.length<10) throw new Error('Respuesta vacía');
+      if(PARSERS[nombre]) PARSERS[nombre](text);
+      localStorage.setItem('cap_tab_'+nombre, text);
+      localStorage.setItem('cap_tab_ts_'+nombre, Date.now());
+      loaded++;
+    }catch(e){
+      const cached=localStorage.getItem('cap_tab_'+nombre);
+      if(cached){ try{ if(PARSERS[nombre]) PARSERS[nombre](cached); }catch(pe){} }
+      errs.push(nombre.replace('_',' '));
+    }
+  }));
+
+  const ts=new Date().toLocaleTimeString('es-PE');
+  if(loaded>0||tabs.length===0){
+    const pending=Object.values(SHEETS_TABS).filter(g=>g.includes('PEGAR')).length;
+    const msg = errs.length>0
+      ? `⚠️ ${loaded} pestañas OK · error en: ${errs.join(', ')} · ${ts}`
+      : pending>0
+        ? `✓ ${loaded} pestañas desde Drive · ${pending} por configurar · ${ts}`
+        : `✓ Todos los gastos desde Drive · ${ts}`;
+    showSheetStatus(msg, errs.length>0?'#e67e22':'#27ae60');
+    localStorage.setItem('cap_tarifas_ts',Date.now());
+  } else if(!silent){
+    showSheetStatus('⚠️ No se pudo conectar a Drive — usando tarifas locales','#e67e22');
+  }
+
+  recalc();
+  if(btn){ btn.textContent='🔄 Drive'; btn.disabled=false; }
+}
+
 function parseTarifasCSV(csv){
-  // Parsea el CSV del Google Sheet de costos.
-  // Estructura esperada: cada fila con TIPO,CAMPO1,CAMPO2,...,VALOR
-  // Secciones: TCNT, TKG, THC, STORAGE, FLETE_MAR, FLETE_AER
+  // ── Formato Google Sheet (columna A = TIPO, B-H = datos) ────────────
+  // TIPO      | C1           | C2             | C3               | C4    | C5  | C6   | C7
+  // ─── NAVIERA CHARGES ───────────────────────────────────────────────
+  // THC       | Importacion  | CMA - CGM      | THC              | 64.9
+  // VB        | Importacion  | CMA - CGM      | Visto Bueno BL   | 28.125
+  // VB        | Importacion  | CMA - CGM      | Visto Bueno Contenedor | 225
+  // GATE_IN   | Importacion  | CMA - CGM      | 205
+  // GATE_OUT  | Exportacion  | CMA - CGM      | 150
+  // DOC_FEE   | Importacion  | HAPAG LLOYD    | 60
+  // ─── STORAGE ────────────────────────────────────────────────────────
+  // STORAGE   | APM          | 20ST           | I                | 335
+  // STORAGE   | APM          | 20ST           | E                | 245
+  // ─── FLETES ─────────────────────────────────────────────────────────
+  // FLETE_MAR | Callao       | Buenaventura   | MAERSK           | 400
+  // FLETE_AER | Lima         | Bogota         | 0.58             | 200
+  // ─── TRANSPORTE LOCAL ────────────────────────────────────────────────
+  // TCNT      | CNT 20       | ZONA 1         | 800
+  // TKG       | 1            | 50             | 240  | 270 | 290 | 310 | 330
+  // ─── ZONAS (distritos Lima) ──────────────────────────────────────────
+  // ZONA      | CALLAO CERCADO | ZONA 1
+  // ─── REGLAS COMERCIALES ──────────────────────────────────────────────
+  // REGLA     | mOk          | 0.15
+  // REGLA     | mGer         | 0.10
+  // ─────────────────────────────────────────────────────────────────────
+
   const rows = csv.split('\n').map(r=>{
     const cols=[]; let cur='', inQ=false;
     for(let ch of r){
       if(ch==='"') inQ=!inQ;
-      else if(ch===','&&!inQ){ cols.push(cur.trim()); cur=''; }
+      else if(ch===','&&!inQ){ cols.push(cur.trim().replace(/\r/g,'')); cur=''; }
       else cur+=ch;
     }
-    cols.push(cur.trim()); return cols;
-  }).filter(r=>r.length>1&&r[0]);
+    cols.push(cur.trim().replace(/\r/g,'')); return cols;
+  }).filter(r=>r.length>1&&r[0]&&!r[0].startsWith('#'));
 
-  let section='';
-  const newTHC=[...THC_VB]; // start with defaults, override matched rows
-  let newTCNT={}, newTKG=[], newSTORAGE={...STORAGE};
-  let inTKG=false, tkg_headers=[];
+  const newTHC=[], newNAV=[];
+  const newSTO={};
+  const newFM=[], newFA=[];
+  const newTCNT={}, newTKG=[];
+  const newZONAS={}, newREG={};
+  let anyData=false;
 
   for(const row of rows){
-    const tag = (row[0]||'').toUpperCase().trim();
-    // Section headers
-    if(['THC','VB','GATE OUT','DOC FEE'].some(k=>tag.includes(k))&&row.length<=3){section='THC';continue;}
-    if(tag.includes('TCNT')||tag.includes('CONTENEDOR')){section='TCNT';continue;}
-    if(tag.includes('TKG')||tag.includes('KG')||tag.includes('PESO')){
-      section='TKG'; inTKG=true; tkg_headers=row.slice(1); continue;}
-    if(tag.includes('STORAGE')||tag.includes('APM')||tag.includes('DPW')||tag.includes('DT')){section='STORAGE';}
+    const tipo=(row[0]||'').toUpperCase().trim();
+    if(!tipo||tipo==='TIPO'||tipo.startsWith('#')||tipo.startsWith('//')) continue;
+    anyData=true;
 
-    // Parse by section
-    if(section==='THC'&&row.length>=4){
-      const [,ruta,nav,cargo,...rest]=row;
-      const val=parseFloat(rest[0])||0;
-      const idx=newTHC.findIndex(x=>x.r===ruta&&x.n===nav&&x.c===cargo);
-      if(idx>=0) newTHC[idx]={...newTHC[idx],t:val};
+    const v1=(row[1]||'').trim(), v2=(row[2]||'').trim(),
+          v3=(row[3]||'').trim(), v4=(row[4]||'').trim(),
+          v5=(row[5]||'').trim(), v6=(row[6]||'').trim(), v7=(row[7]||'').trim();
+
+    if(tipo==='THC'||tipo==='VB'){
+      // ruta | naviera | cargo_label | tarifa
+      if(v1&&v2&&v3) newTHC.push({r:v1,n:v2,c:v3,t:parseFloat(v4)||0});
     }
-    if(section==='TCNT'&&row.length>=7){
-      const cnt=row[0]; 
-      if(!newTCNT[cnt]) newTCNT[cnt]={};
-      ['ZONA 1','ZONA 2','ZONA 3','ZONA 4','ZONA 4 II'].forEach((z,i)=>{
-        if(row[i+1]) newTCNT[cnt][z]=parseFloat(row[i+1])||newTCNT[cnt][z]||0;
-      });
+    else if(tipo==='GATE_IN'||tipo==='GATE IN'){
+      // ruta | naviera | tarifa
+      if(v1&&v2) newNAV.push({r:v1,n:v2,c:'Gate in',t:parseFloat(v3)||0});
     }
-    if(section==='TKG'&&row.length>=3&&!isNaN(parseFloat(row[0]))){
-      const obj={a:parseFloat(row[0]),b:parseFloat(row[1])||99999};
-      tkg_headers.forEach((h,i)=>{ if(row[i+2]) obj[h]=parseFloat(row[i+2])||0; });
-      newTKG.push(obj);
+    else if(tipo==='GATE_OUT'||tipo==='GATE OUT'){
+      if(v1&&v2) newNAV.push({r:v1,n:v2,c:'Gate Out',t:parseFloat(v3)||0});
     }
-    if(section==='STORAGE'&&row.length>=4){
-      const [dep,cnt,op,val]=row;
-      if(newSTORAGE[dep]&&newSTORAGE[dep][cnt]) newSTORAGE[dep][cnt][op]=parseFloat(val)||0;
+    else if(tipo==='DOC_FEE'||tipo==='DOC FEE'){
+      if(v1&&v2) newNAV.push({r:v1,n:v2,c:'Doc Fee',t:parseFloat(v3)||0});
+    }
+    else if(tipo==='STORAGE'){
+      // deposito | tipo_cnt | I o E | tarifa
+      if(v1&&v2&&v3){
+        if(!newSTO[v1]) newSTO[v1]={};
+        if(!newSTO[v1][v2]) newSTO[v1][v2]={};
+        newSTO[v1][v2][v3]=parseFloat(v4)||0;
+      }
+    }
+    else if(tipo==='FLETE_MAR'||tipo==='FLETE MAR'){
+      // origen | destino | naviera | tarifa
+      if(v1&&v2) newFM.push({ori:v1,des:v2,nav:v3,t:parseFloat(v4)||0});
+    }
+    else if(tipo==='FLETE_AER'||tipo==='FLETE AER'){
+      // origen | destino | tarifa_kg | minimo
+      if(v1&&v2) newFA.push({ori:v1,des:v2,tKg:parseFloat(v3)||0,min:parseFloat(v4)||0});
+    }
+    else if(tipo==='TCNT'){
+      // tipo_cnt | zona | tarifa
+      if(v1&&v2){ if(!newTCNT[v1]) newTCNT[v1]={}; newTCNT[v1][v2]=parseFloat(v3)||0; }
+    }
+    else if(tipo==='TKG'){
+      // kg_desde | kg_hasta | ZONA1 | ZONA2 | ZONA3 | ZONA4 | ZONA4II
+      const a=parseFloat(v1), b=parseFloat(v2)||99999;
+      if(!isNaN(a)&&a>0){
+        const obj={a,b};
+        ['ZONA 1','ZONA 2','ZONA 3','ZONA 4','ZONA 4 II'].forEach((z,i)=>{
+          const val=[v3,v4,v5,v6,v7][i];
+          if(val!=='') obj[z]=parseFloat(val)||0;
+        });
+        newTKG.push(obj);
+      }
+    }
+    else if(tipo==='ZONA'){
+      // distrito | zona_label
+      if(v1&&v2) newZONAS[v1.toUpperCase()]=v2;
+    }
+    else if(tipo==='REGLA'){
+      // clave | valor_numerico
+      const num=parseFloat(v2);
+      if(v1&&!isNaN(num)) newREG[v1]=num;
     }
   }
 
-  // Apply updates
-  THC_VB.splice(0,THC_VB.length,...newTHC);
-  if(Object.keys(newTCNT).length>0) Object.assign(TCNT,newTCNT);
-  if(newTKG.length>0){ TKG.splice(0,TKG.length,...newTKG); }
-  Object.assign(STORAGE,newSTORAGE);
+  if(!anyData) throw new Error('CSV vacío o sin datos válidos');
+
+  // Aplicar — reemplaza solo las secciones que vienen del Drive
+  if(newTHC.length>0)                THC_VB.splice(0,THC_VB.length,...newTHC);
+  if(newNAV.length>0)                CARGOS_NAV.splice(0,CARGOS_NAV.length,...newNAV);
+  if(newFM.length>0)                 FLETE_MAR.splice(0,FLETE_MAR.length,...newFM);
+  if(newFA.length>0)                 FLETE_AER.splice(0,FLETE_AER.length,...newFA);
+  if(newTKG.length>0)                TKG.splice(0,TKG.length,...newTKG);
+  if(Object.keys(newTCNT).length>0){ Object.keys(TCNT).forEach(k=>delete TCNT[k]); Object.assign(TCNT,newTCNT); }
+  if(Object.keys(newSTO).length>0){
+    Object.keys(newSTO).forEach(dep=>{
+      if(!STORAGE[dep]) STORAGE[dep]={};
+      Object.keys(newSTO[dep]).forEach(cnt=>{
+        if(!STORAGE[dep][cnt]) STORAGE[dep][cnt]={};
+        Object.assign(STORAGE[dep][cnt], newSTO[dep][cnt]);
+      });
+    });
+  }
+  if(Object.keys(newZONAS).length>0) Object.assign(ZONAS,newZONAS);
+  if(Object.keys(newREG).length>0)   Object.assign(REGLAS,newREG);
+
   recalc();
 }
 
@@ -1733,10 +1989,24 @@ function initApp(){
   buildWt();
   onModChange();
   loadSavedKey();
-  // Intentar cargar desde caché primero, luego Drive
-  const cached = localStorage.getItem('cap_tarifas_cache');
-  if(cached){ try{ parseTarifasCSV(cached); }catch(e){} }
-  loadTarifasFromDrive(true);
+  // Cargar desde caché de cada pestaña (respuesta inmediata)
+  const PARSERS={
+    THC_VB:_parseThcVb, CARGOS_NAVIERA:_parseCargosNaviera,
+    FLETE_MARITIMO:_parseFleteMar, FLETE_AEREO:_parseFleteAer,
+    TRANSPORTE_LOCAL:_parseTransporteLocal, GASTOS_LOCALES:_parseGastosLocales
+  };
+  let hasCache=false;
+  Object.keys(PARSERS).forEach(nombre=>{
+    const c=localStorage.getItem('cap_tab_'+nombre);
+    if(c){ try{ PARSERS[nombre](c); hasCache=true; }catch(e){} }
+  });
+  // También intentar caché antiguo (compatibilidad con v2.7)
+  if(!hasCache){
+    const old=localStorage.getItem('cap_tarifas_cache');
+    if(old){ try{ parseTarifasCSV(old); hasCache=true; }catch(e){} }
+  }
+  // Sincronizar Drive (silencioso si ya había caché)
+  loadTarifasFromDrive(!hasCache);
 }
 
 // Al cargar: verificar sesión existente, si no → mostrar login
