@@ -1168,37 +1168,39 @@ async function analizarImagen(){
 
   const DISTRITOS = Object.keys(ZONAS).sort().join(', ');
 
-  const prompt = `Eres un asistente experto en logística de comercio exterior peruano. Analiza este documento (puede ser correo, booking, B/L, proforma, instrucción de embarque, etc.) y extrae los campos indicados.
+  const prompt = `Eres un asistente experto en logística de comercio exterior peruano. Analiza este documento (puede ser correo, booking, B/L, proforma, carta, instrucción de embarque, etc.).
 
-REGLAS IMPORTANTES:
-- "distrito_recojo": distrito de Lima/Callao donde se recoge la mercancía (almacén del exportador o punto de recojo). Busca direcciones como "Av. ..., San Isidro", "Jr. ..., Callao", etc. Debe ser uno de los distritos de Lima/Callao.
-- "distrito_entrega": distrito de Lima/Callao donde se entrega la mercancía al cliente o consignatario.
-- "direccion_recojo": dirección completa de recojo (calle, número, distrito) si aparece.
-- "direccion_entrega": dirección completa de entrega (calle, número, distrito) si aparece.
-- Para incoterms EXW/FCA: el recojo suele ser en el almacén del exportador → llena distrito_recojo.
-- Para incoterms DDU/DAP: la entrega es en el domicilio del importador → llena distrito_entrega.
-- "naviera": debe ser exactamente uno de los valores permitidos, o null si no coincide.
+Tu tarea: extraer la información del envío Y detectar la dirección física mencionada en el documento (almacén, planta, domicilio del cliente, etc.) para identificar el distrito de Lima/Callao.
 
-Distritos válidos de Lima/Callao: ${DISTRITOS}
+REGLAS PARA DETECTAR DIRECCIÓN:
+- Busca cualquier dirección física mencionada: "Av. ...", "Jr. ...", "Calle ...", "Urb. ...", "Almacén en ...", "Planta ...", "Domicilio: ...", etc.
+- Identifica a qué distrito de Lima/Callao pertenece esa dirección.
+- Pon la dirección completa en "direccion_local" y el distrito en "distrito_local".
+- Si hay dos direcciones distintas (una de origen y una de destino dentro de Lima), pon la más relevante.
 
-Devuelve SOLO un JSON válido (sin explicaciones, sin markdown):
+REGLAS PARA INCOTERM (solo para referencia, NO determines recojo/entrega aquí):
+- EXW, FCA, FOB = probablemente Exportación, la dirección es del exportador (recojo)
+- DDU, DAP, DPU = probablemente Importación, la dirección es del importador (entrega)
+
+Distritos válidos: ${DISTRITOS}
+Navieras válidas: ${NAVIERAS.join(', ')}
+
+Devuelve SOLO JSON válido sin markdown:
 
 {
-  "operacion": "Importacion" o "Exportacion",
-  "modalidad": "Maritimo" o "Aereo",
-  "incoterm": "EXW" | "FCA" | "FOB" | "DDU" | "DAP" | null,
-  "naviera": uno de los permitidos o null,
-  "origen": ciudad o puerto de origen internacional,
-  "destino": ciudad o puerto de destino internacional,
+  "operacion": "Importacion" | "Exportacion" | null,
+  "modalidad": "Maritimo" | "Aereo" | null,
+  "incoterm": "EXW" | "FCA" | "FOB" | "DDU" | "DAP" | "DPU" | null,
+  "naviera": naviera exacta de la lista o null,
+  "origen": ciudad/puerto de origen internacional o null,
+  "destino": ciudad/puerto de destino internacional o null,
   "tipo_contenedor": "20ST" | "40ST" | "40HC" | "LCL" | null,
   "cantidad_cnt": número entero o null,
   "cantidad_bl": número entero o null,
   "peso_kg": número o null,
   "valor_cif_usd": número o null,
-  "distrito_recojo": uno de los distritos válidos o null,
-  "distrito_entrega": uno de los distritos válidos o null,
-  "direccion_recojo": "texto completo de la dirección de recojo" o null,
-  "direccion_entrega": "texto completo de la dirección de entrega" o null
+  "distrito_local": distrito de Lima/Callao encontrado en el documento o null,
+  "direccion_local": dirección completa encontrada en el documento o null
 }`;
 
   // Preparar imagen: si es PDF, solo mandamos texto con aviso
@@ -1255,101 +1257,107 @@ function aplicarExtraccion(d){
   let log = '<b>✅ Datos extraídos:</b><br>';
   let cnt = 0;
 
-  // Setea un campo por id (select o input)
-  function set(id, val, label){
+  // ── helpers ──
+  function setVal(id, val, label){
     if(val===null||val===undefined||val==='') return;
-    const el = document.getElementById(id);
+    const el=document.getElementById(id);
     if(!el) return;
     if(el.tagName==='SELECT'){
-      const opts = Array.from(el.options);
-      // Coincidencia exacta primero, luego parcial
-      let match = opts.find(o=>o.value.toLowerCase()===String(val).toLowerCase());
-      if(!match) match = opts.find(o=>o.value.toLowerCase().includes(String(val).toLowerCase())
-                                   || String(val).toLowerCase().includes(o.value.toLowerCase()));
-      if(match){ el.value=match.value; log+=`• ${label}: <b>${match.text||match.value}</b><br>`; cnt++; }
-      else { log+=`• ${label}: <span style="color:var(--warn)">⚠ "${val}" no encontrado en lista</span><br>`; }
+      const opts=Array.from(el.options);
+      let m=opts.find(o=>o.value.toLowerCase()===String(val).toLowerCase());
+      if(!m) m=opts.find(o=>String(val).toLowerCase().includes(o.value.toLowerCase())
+                          || o.value.toLowerCase().includes(String(val).toLowerCase()));
+      if(m){ el.value=m.value; log+=`• ${label}: <b>${m.value}</b><br>`; cnt++; }
+      else   log+=`• ${label}: <span style="color:var(--warn)">⚠ "${val}" no en lista</span><br>`;
     } else {
-      el.value = val;
-      log += `• ${label}: <b>${val}</b><br>`;
-      cnt++;
+      el.value=val; log+=`• ${label}: <b>${val}</b><br>`; cnt++;
     }
   }
 
-  // Setea distrito en un select buscando el texto del distrito
   function setDistrito(id, distrito, label){
-    if(!distrito) return;
-    const el = document.getElementById(id);
-    if(!el) return;
-    const opts = Array.from(el.options);
-    const dist = String(distrito).toUpperCase().trim();
-    // Coincidencia exacta
-    let match = opts.find(o=>o.value.toUpperCase()===dist);
-    // Coincidencia parcial si no hay exacta
-    if(!match) match = opts.find(o=>dist.includes(o.value.toUpperCase()) || o.value.toUpperCase().includes(dist));
-    if(match){
-      el.value = match.value;
-      log += `• ${label}: <b>${match.value}</b><br>`;
-      cnt++;
-    } else {
-      log += `• ${label}: <span style="color:var(--warn)">⚠ Distrito "${distrito}" no está en la lista — selecciónalo manualmente</span><br>`;
-    }
+    if(!distrito) return false;
+    const el=document.getElementById(id);
+    if(!el) return false;
+    const opts=Array.from(el.options);
+    const d2=String(distrito).toUpperCase().trim();
+    let m=opts.find(o=>o.value.toUpperCase()===d2);
+    if(!m) m=opts.find(o=>d2.includes(o.value.toUpperCase())||o.value.toUpperCase().includes(d2));
+    if(m){ el.value=m.value; log+=`• ${label}: <b>${m.value}</b><br>`; cnt++; return true; }
+    log+=`• ${label}: <span style="color:var(--warn)">⚠ "${distrito}" — selecciona manualmente</span><br>`;
+    return false;
   }
 
-  // 1. Modalidad primero (afecta opciones de incoterm)
-  if(d.modalidad){
-    set('s_mod', d.modalidad, 'Modalidad');
-    onModChange();
-  }
-  // 2. Incoterm (afecta variante)
-  if(d.incoterm){
-    set('s_inc', d.incoterm, 'Incoterm');
-    onIncChange();
-  }
-  // 3. Resto de campos principales
-  if(d.operacion)       set('s_op',       d.operacion,       'Operación');
-  if(d.naviera)         set('s_nav',      d.naviera,         'Naviera');
-  if(d.origen)          set('s_ori',      d.origen,          'Origen internacional');
-  if(d.destino)         set('s_des',      d.destino,         'Destino internacional');
-  if(d.tipo_contenedor) set('s_cnt_tipo', d.tipo_contenedor, 'Tipo CNT');
-  if(d.cantidad_cnt)    set('s_cnt_qty',  d.cantidad_cnt,    'Cant. CNT');
-  if(d.cantidad_bl)     set('s_bl_qty',   d.cantidad_bl,     '# BL/AWB');
-  if(d.peso_kg)         set('s_peso_kg',  d.peso_kg,         'Peso KG');
-  if(d.valor_cif_usd)   set('s_valor',    d.valor_cif_usd,   'Valor CIF USD');
+  // ── 1. Modalidad → refresca incoterms disponibles ──
+  if(d.modalidad){ setVal('s_mod', d.modalidad, 'Modalidad'); onModChange(); }
 
-  // 4. Distritos de recojo/entrega según incoterm
+  // ── 2. Incoterm → refresca variante ──
+  if(d.incoterm){ setVal('s_inc', d.incoterm, 'Incoterm'); onIncChange(); }
+
+  // ── 3. Operación y datos del envío ──
+  if(d.operacion)       setVal('s_op',       d.operacion,       'Operación');
+  if(d.naviera)         setVal('s_nav',      d.naviera,         'Naviera');
+  if(d.origen)          setVal('s_ori',      d.origen,          'Origen internacional');
+  if(d.destino)         setVal('s_des',      d.destino,         'Destino internacional');
+  if(d.tipo_contenedor) setVal('s_cnt_tipo', d.tipo_contenedor, 'Tipo CNT');
+  if(d.cantidad_cnt)    setVal('s_cnt_qty',  d.cantidad_cnt,    'Cant. CNT');
+  if(d.cantidad_bl)     setVal('s_bl_qty',   d.cantidad_bl,     '# BL/AWB');
+  if(d.peso_kg)         setVal('s_peso_kg',  d.peso_kg,         'Peso KG');
+  if(d.valor_cif_usd)   setVal('s_valor',    d.valor_cif_usd,   'Valor CIF USD');
+
+  // ── 4. LÓGICA DE DISTRITOS SEGÚN INCOTERM ──
+  //
+  //  INCOTERMS DE RECOJO (exportación / carga en origen):
+  //    EXW, FCA, FOB → la dirección del doc = RECOJO en almacén cliente
+  //                   → ENTREGA automática = CALLAO CERCADO (puerto)
+  //
+  //  INCOTERMS DE ENTREGA (importación / entrega en destino):
+  //    DDU, DAP, DPU → la dirección del doc = ENTREGA al consignatario
+  //                  → RECOJO automático = CALLAO CERCADO (terminal/depósito)
+
   const inc = gv('s_inc');
-  const op  = gv('s_op');
+  const CALLAO = 'CALLAO CERCADO';
+  const INC_RECOJO  = ['EXW','FCA','FOB'];   // la dirección del doc va en RECOJO
+  const INC_ENTREGA = ['DDU','DAP','DPU'];   // la dirección del doc va en ENTREGA
 
-  // Lógica según incoterm:
-  // EXW, FCA, FOB (Exportacion) → recojo en almacén exportador → distrito_recojo
-  // DDU, DAP (Importacion) → entrega al consignatario → distrito_entrega
-  // Si vienen ambos del documento, llenamos ambos
-  if(d.distrito_recojo)  setDistrito('s_dis_r', d.distrito_recojo,  '🚚 Distrito de recojo');
-  if(d.distrito_entrega) setDistrito('s_dis_e', d.distrito_entrega, '📦 Distrito de entrega');
+  const distrLoc = d.distrito_local || null;
+  const dirLoc   = d.direccion_local || null;
 
-  // Si solo vino un distrito y el incoterm indica claramente cuál es
-  if(!d.distrito_recojo && !d.distrito_entrega){
-    // Intentar inferir: si hay una dirección de recojo detectada
-    const incExpo = ['EXW','FCA','FOB'].includes(inc);
-    const incImpo = ['DDU','DAP'].includes(inc);
-    if(d.direccion_recojo && incExpo)  log += `• 📍 Dirección recojo detectada: <b>${d.direccion_recojo}</b> — selecciona el distrito manualmente<br>`;
-    if(d.direccion_entrega && incImpo) log += `• 📍 Dirección entrega detectada: <b>${d.direccion_entrega}</b> — selecciona el distrito manualmente<br>`;
+  if(INC_RECOJO.includes(inc)){
+    // Dirección detectada → Distrito de Recojo
+    if(distrLoc){
+      setDistrito('s_dis_r', distrLoc, '🚚 Distrito de Recojo (del documento)');
+    } else if(dirLoc){
+      log+=`• 🚚 Dirección de recojo detectada: <i>${dirLoc}</i> — selecciona el distrito manualmente<br>`;
+    }
+    // Callao → Distrito de Entrega (puerto/terminal)
+    setDistrito('s_dis_e', CALLAO, '🏭 Distrito de Entrega → Puerto Callao');
+    log+=`<span style="font-size:11px;color:var(--mu)">ℹ️ Incoterm ${inc}: entrega automática en CALLAO (puerto de embarque)</span><br>`;
+
+  } else if(INC_ENTREGA.includes(inc)){
+    // Callao → Distrito de Recojo (terminal/depósito)
+    setDistrito('s_dis_r', CALLAO, '🏭 Distrito de Recojo → Puerto Callao');
+    log+=`<span style="font-size:11px;color:var(--mu)">ℹ️ Incoterm ${inc}: recojo automático desde CALLAO (terminal de descarga)</span><br>`;
+    // Dirección detectada → Distrito de Entrega
+    if(distrLoc){
+      setDistrito('s_dis_e', distrLoc, '📦 Distrito de Entrega (del documento)');
+    } else if(dirLoc){
+      log+=`• 📦 Dirección de entrega detectada: <i>${dirLoc}</i> — selecciona el distrito manualmente<br>`;
+    }
+
+  } else {
+    // Incoterm no reconocido o nulo: llenar lo que venga sin lógica automática
+    if(distrLoc) setDistrito('s_dis_r', distrLoc, '📍 Distrito detectado (recojo)');
+    if(dirLoc)   log+=`• 📍 Dirección detectada: <i>${dirLoc}</i><br>`;
   }
-
-  // Mostrar direcciones completas como referencia aunque el distrito no esté en la lista
-  if(d.direccion_recojo && !d.distrito_recojo)
-    log += `• 📍 Dir. recojo completa: <i>${d.direccion_recojo}</i><br>`;
-  if(d.direccion_entrega && !d.distrito_entrega)
-    log += `• 📍 Dir. entrega completa: <i>${d.direccion_entrega}</i><br>`;
 
   recalc();
 
   if(cnt===0){
-    iaStatus('⚠️ No se pudo extraer información. Intenta con una imagen más nítida o de mayor resolución.','#fff3e0','#bf360c');
+    iaStatus('⚠️ No se pudo extraer información. Intenta con imagen más nítida.','#fff3e0','#bf360c');
   } else {
-    log += `<br><span style="color:var(--mu);font-style:italic">${cnt} campo(s) completados automáticamente.</span>`;
-    iaStatus(log, '#e8f5e9', '#1b5e20');
-    if(window.innerWidth<860) setTimeout(()=>showTab('r'), 700);
+    log+=`<br><span style="color:var(--mu);font-style:italic">${cnt} campo(s) completados.</span>`;
+    iaStatus(log,'#e8f5e9','#1b5e20');
+    if(window.innerWidth<860) setTimeout(()=>showTab('r'),700);
   }
 }
 
