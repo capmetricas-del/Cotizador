@@ -196,7 +196,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <div>
     <h1>CAP Logistic · Cotizador</h1>
-    <div class="sub">v2.6 · offline</div>
+    <div class="sub">v2.4 · offline</div>
   </div>
   <div class="hdr-acts">
     <div id="login-user-bar">
@@ -1188,7 +1188,7 @@ function iaStatus(msg, bg, color){
 
 async function analizarImagen(){
   const key = (document.getElementById('ia_key')||{}).value || localStorage.getItem('cap_ia_key') || '';
-  if(!key.startsWith('sk-')){ iaStatus('⚠️ Ingresa tu API Key de OpenAI (sk-...) y guárdala.','#fff3e0','#bf360c'); return; }
+  if(!key||key.length<20){ iaStatus('⚠️ Ingresa tu API Key de OpenAI y guárdala con 💾','#fff3e0','#bf360c'); return; }
   if(!_iaB64){ iaStatus('⚠️ Selecciona una imagen primero.','#fff3e0','#bf360c'); return; }
 
   const btn = document.getElementById('ia_btn');
@@ -1295,29 +1295,32 @@ Devuelve SOLO JSON válido, sin markdown ni comentarios:
   }
 
   try {
-    const resp = await fetch('https://api.openai.com/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages,
-        max_tokens: 500,
-        temperature: 0,
-      })
-    });
+    let resp;
+    try {
+      resp = await fetch('https://api.openai.com/v1/chat/completions',{
+        method:'POST',
+        mode:'cors',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+        body: JSON.stringify({model:'gpt-4o',messages,max_tokens:500,temperature:0})
+      });
+    } catch(netErr){
+      throw new Error('Sin conexión a internet o el navegador bloqueó la solicitud. Abre el archivo desde un servidor local (no como file://).');
+    }
     if(!resp.ok){
-      const err = await resp.json();
-      throw new Error(err.error?.message || resp.statusText);
+      let errMsg = resp.statusText;
+      try{ const e=await resp.json(); errMsg=e.error?.message||errMsg; }catch(_){}
+      if(resp.status===401) throw new Error('API Key inválida o sin permisos (401)');
+      if(resp.status===429) throw new Error('Límite de uso alcanzado en OpenAI (429)');
+      throw new Error(`OpenAI ${resp.status}: ${errMsg}`);
     }
     const data = await resp.json();
     const text = data.choices[0].message.content.trim();
-    // Extraer JSON aunque venga con markdown
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if(!jsonMatch) throw new Error('No se encontró JSON en la respuesta: '+text);
     const ext = JSON.parse(jsonMatch[0]);
     aplicarExtraccion(ext);
   } catch(e){
-    iaStatus('❌ Error: '+e.message,'#fce4ec','#880e4f');
+    iaStatus('❌ '+e.message,'#fce4ec','#880e4f');
   } finally {
     btn.textContent='🔍 Analizar y completar formulario';
     btn.disabled=false;
@@ -1508,7 +1511,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ══════════════════════════════════════════════
 
 // ▼▼▼ PEGA AQUÍ TU URL DEL APPS SCRIPT (ver guía) ▼▼▼
-const AUTH_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw8FPbC6pBVcoEziP6WqzsXbNbvS39KE_RDJHfHvDsm1ezqbCgpXT1T7UrdhHpmZzy3/exec';
+const AUTH_SCRIPT_URL = 'PEGAR_URL_APPS_SCRIPT_AQUI';
 // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 // ── Google Sheets: base de costos ──────────────
@@ -1598,7 +1601,7 @@ function loadSavedKey(){
 }
 function saveKey(){
   const k = (document.getElementById('ia_key')||{}).value||'';
-  if(!k.startsWith('sk-')){ showKeyMsg('⚠️ Key inválida (debe empezar con sk-)','#e53935'); return; }
+  if(!k||k.length<20){ showKeyMsg('⚠️ Key muy corta o vacía','#e53935'); return; }
   localStorage.setItem('cap_ia_key', k);
   showKeyMsg('✓ Key guardada en este dispositivo','#27ae60');
 }
