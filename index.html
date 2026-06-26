@@ -196,7 +196,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <div>
     <h1>CAP Logistic · Cotizador</h1>
-    <div class="sub">v2.8 · offline</div>
+    <div class="sub">v2.9 · offline</div>
   </div>
   <div class="hdr-acts">
     <div id="login-user-bar">
@@ -1519,22 +1519,21 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ══════════════════════════════════════════════
 
 // ▼▼▼ PEGA AQUÍ TU URL DEL APPS SCRIPT (ver guía) ▼▼▼
-const AUTH_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw8FPbC6pBVcoEziP6WqzsXbNbvS39KE_RDJHfHvDsm1ezqbCgpXT1T7UrdhHpmZzy3/exec';
+const AUTH_SCRIPT_URL = 'PEGAR_URL_APPS_SCRIPT_AQUI';
 // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 // ── Google Sheets: base de costos ──────────────────────────────────────
-// Para obtener el GID de cada pestaña: click en la pestaña → la URL
-// muestra #gid=XXXXXXX al final.  Pegar ese número aquí.
-// La hoja DEBE ser "Cualquier persona con el enlace puede ver".
+// Usa gviz/tq (no requiere login mientras la hoja sea "Lector público")
+// Los nombres aquí deben coincidir EXACTAMENTE con el nombre de la pestaña.
 // ───────────────────────────────────────────────────────────────────────
 const SHEETS_ID = '1qrwaOj1W738V1EyqzxrfXDUlicsEe6HEg4FzvulGtZQ';
-const SHEETS_TABS = {
-  TRANSPORTE_LOCAL : '958886659',     // ← ya configurado
-  THC_VB           : '9793601',    // ← pestaña "THC VB"
-  CARGOS_NAVIERA   : '379243276',    // ← pestaña "CARGOS NAVIERA"
-  FLETE_MARITIMO   : '456102879',    // ← pestaña "FLETE MARITIMO"
-  FLETE_AEREO      : '1779115188',    // ← pestaña "FLETE AEREO"
-  GASTOS_LOCALES   : '1114582596',    // ← pestaña "GASTOS LOCALES"
+const SHEETS_NAMES = {
+  THC_VB          : 'THC VB',
+  CARGOS_NAVIERA  : 'CARGOS NAVIERA',
+  FLETE_MARITIMO  : 'FLETE MARITIMO',
+  FLETE_AEREO     : 'FLETE AEREO',
+  GASTOS_LOCALES  : 'GASTOS LOCALES',
+  TRANSPORTE_LOCAL: 'Transporte Local',
 };
 // ───────────────────────────────────────────────────────────────────────
 
@@ -1687,13 +1686,14 @@ function _parseThcVb(csv){
 }
 
 function _parseCargosNaviera(csv){
-  // Misma estructura que THC VB pero solo cargos locales (Gate In/Out, Doc Fee, Resguardo)
+  // Columnas: A=Llave | B=Régimen | C=Naviera | D=Concepto | E=Costo USD | F=Moneda...
   const rows=_csvRows(csv); const newNAV=[];
   for(const row of rows){
     const reg=(row[1]||'').trim(), nav=(row[2]||'').trim(),
-          con=(row[3]||'').trim(), tar=_pn(row[5]);
+          con=(row[3]||'').trim(), tar=_pn(row[4]); // col E (índice 4) = Costo USD
     if(!reg||!nav||!con) continue;
     if(['Importacion','Exportacion'].indexOf(reg)<0) continue;
+    if(tar===0) continue; // omitir filas sin tarifa
     newNAV.push({r:reg,n:nav,c:con,t:tar});
   }
   if(newNAV.length>0) CARGOS_NAV.splice(0,CARGOS_NAV.length,...newNAV);
@@ -1786,7 +1786,7 @@ function _parseGastosLocales(csv){
   }
 }
 
-// ── Carga principal (multi-tab) ────────────────────────────────────────
+// ── Carga principal (multi-tab via gviz/tq) ────────────────────────────
 async function loadTarifasFromDrive(silent){
   const btn=document.getElementById('sheet_btn');
   if(btn){ btn.textContent='⏳ Cargando...'; btn.disabled=true; }
@@ -1801,39 +1801,37 @@ async function loadTarifasFromDrive(silent){
     GASTOS_LOCALES:  _parseGastosLocales,
   };
 
-  const tabs=Object.entries(SHEETS_TABS).filter(([,gid])=>gid&&!gid.includes('PEGAR'));
+  const tabs=Object.entries(SHEETS_NAMES);
   let loaded=0; const errs=[];
 
-  await Promise.all(tabs.map(async ([nombre,gid])=>{
-    const url=`https://docs.google.com/spreadsheets/d/${SHEETS_ID}/export?format=csv&gid=${gid}`;
+  await Promise.all(tabs.map(async ([clave, nombreHoja])=>{
+    // gviz/tq funciona con hoja pública sin autenticación
+    const url=`https://docs.google.com/spreadsheets/d/${SHEETS_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(nombreHoja)}`;
     try{
       const resp=await fetch(url);
       if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const text=await resp.text();
       if(!text||text.length<10) throw new Error('Respuesta vacía');
-      if(PARSERS[nombre]) PARSERS[nombre](text);
-      localStorage.setItem('cap_tab_'+nombre, text);
-      localStorage.setItem('cap_tab_ts_'+nombre, Date.now());
+      if(PARSERS[clave]) PARSERS[clave](text);
+      localStorage.setItem('cap_tab_'+clave, text);
+      localStorage.setItem('cap_tab_ts_'+clave, Date.now());
       loaded++;
     }catch(e){
-      const cached=localStorage.getItem('cap_tab_'+nombre);
-      if(cached){ try{ if(PARSERS[nombre]) PARSERS[nombre](cached); }catch(pe){} }
-      errs.push(nombre.replace('_',' '));
+      const cached=localStorage.getItem('cap_tab_'+clave);
+      if(cached){ try{ if(PARSERS[clave]) PARSERS[clave](cached); }catch(pe){} }
+      errs.push(nombreHoja);
     }
   }));
 
   const ts=new Date().toLocaleTimeString('es-PE');
-  if(loaded>0||tabs.length===0){
-    const pending=Object.values(SHEETS_TABS).filter(g=>g.includes('PEGAR')).length;
-    const msg = errs.length>0
-      ? `⚠️ ${loaded} pestañas OK · error en: ${errs.join(', ')} · ${ts}`
-      : pending>0
-        ? `✓ ${loaded} pestañas desde Drive · ${pending} por configurar · ${ts}`
-        : `✓ Todos los gastos desde Drive · ${ts}`;
+  if(loaded>0){
+    const msg=errs.length>0
+      ? `⚠️ ${loaded}/6 pestañas OK · falla: ${errs.join(', ')} · ${ts}`
+      : `✓ ${loaded} pestañas actualizadas desde Drive · ${ts}`;
     showSheetStatus(msg, errs.length>0?'#e67e22':'#27ae60');
     localStorage.setItem('cap_tarifas_ts',Date.now());
   } else if(!silent){
-    showSheetStatus('⚠️ No se pudo conectar a Drive — usando tarifas locales','#e67e22');
+    showSheetStatus('⚠️ No se pudo conectar a Drive — verifica que la hoja sea pública','#e67e22');
   }
 
   recalc();
@@ -1990,15 +1988,15 @@ function initApp(){
   onModChange();
   loadSavedKey();
   // Cargar desde caché de cada pestaña (respuesta inmediata)
-  const PARSERS={
+  const _INIT_PARSERS={
     THC_VB:_parseThcVb, CARGOS_NAVIERA:_parseCargosNaviera,
     FLETE_MARITIMO:_parseFleteMar, FLETE_AEREO:_parseFleteAer,
     TRANSPORTE_LOCAL:_parseTransporteLocal, GASTOS_LOCALES:_parseGastosLocales
   };
   let hasCache=false;
-  Object.keys(PARSERS).forEach(nombre=>{
-    const c=localStorage.getItem('cap_tab_'+nombre);
-    if(c){ try{ PARSERS[nombre](c); hasCache=true; }catch(e){} }
+  Object.keys(_INIT_PARSERS).forEach(clave=>{
+    const c=localStorage.getItem('cap_tab_'+clave);
+    if(c){ try{ _INIT_PARSERS[clave](c); hasCache=true; }catch(e){} }
   });
   // También intentar caché antiguo (compatibilidad con v2.7)
   if(!hasCache){
