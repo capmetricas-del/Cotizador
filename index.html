@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>CAP Cotizador</title>
+<style>
+:root{
+  --p:#1a4f7a;--p2:#2471a3;--ok:#27ae60;--warn:#e67e22;--blk:#c0392b;
+  --bg:#eef2f7;--card:#fff;--bd:#d1d9e0;--tx:#2c3e50;--mu:#6c757d;
+  --yel:#fffde7;--gn:#e8f5e9;--bl:#e3f2fd;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow-x:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px}
+
+/* HEADER */
+.hdr{background:var(--p);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;
+     position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.logo{width:36px;height:36px;background:#fff;border-radius:7px;display:flex;align-items:center;
+      justify-content:center;font-weight:900;color:var(--p);font-size:12px;flex-shrink:0}
+.hdr h1{font-size:14px;font-weight:700;line-height:1.2}
+.hdr .sub{font-size:10px;opacity:.7}
+.hdr-acts{margin-left:auto;display:flex;gap:6px}
+.ibtn{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:#fff;
+      border-radius:6px;padding:6px 11px;cursor:pointer;font-size:12px;font-weight:600;min-height:36px}
+
+/* TABS — mobile only */
+.tabs{display:flex;background:var(--p);border-top:1px solid rgba(255,255,255,.15)}
+.tab{flex:1;padding:10px 6px;text-align:center;color:rgba(255,255,255,.6);font-size:13px;
+     font-weight:600;cursor:pointer;border-bottom:3px solid transparent;transition:all .15s}
+.tab.active{color:#fff;border-bottom-color:#fff}
+.tc{background:#e67e22;color:#fff;font-size:10px;font-weight:700;
+    padding:1px 5px;border-radius:8px;margin-left:4px}
+
+/* LAYOUT — mobile: one column with show/hide via class on .page */
+.page{padding:8px}
+.col-r{display:none}          /* hidden by default on mobile */
+.page.show-r .col-l{display:none}
+.page.show-r .col-r{display:block}
+
+/* DESKTOP */
+@media(min-width:860px){
+  .tabs{display:none}
+  .page{display:grid;grid-template-columns:390px 1fr;gap:12px;align-items:start;
+        max-width:1400px;margin:0 auto;padding:12px}
+  .col-l,.col-r{display:block!important}
+}
+@media print{.hdr,.tabs,.ibtn{display:none!important}.page{display:block}
+  .col-l,.col-r{display:block!important}}
+
+/* CARDS */
+.card{background:var(--card);border-radius:10px;border:1px solid var(--bd);
+      overflow:hidden;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.ch{background:var(--p);color:#fff;padding:10px 14px;font-weight:700;font-size:13px;
+    display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none}
+.ch2{background:var(--p2)}
+.cb{padding:12px}
+.coll{overflow:hidden;transition:max-height .3s ease;max-height:3000px}
+.coll.closed{max-height:0}
+.chv{transition:transform .2s;display:inline-block}
+.chv.rot{transform:rotate(-90deg)}
+
+/* FORM */
+.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.fg label{font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.4px}
+.fg select,.fg input{border:1px solid var(--bd);border-radius:8px;padding:0 12px;
+  height:44px;font-size:15px;width:100%;background:#fff;color:var(--tx);outline:none;
+  -webkit-appearance:none;appearance:none}
+.fg select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236c757d' fill='none' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
+.fg select:focus,.fg input:focus{border-color:var(--p2);box-shadow:0 0 0 3px rgba(36,113,163,.15)}
+.iy{background:var(--yel)!important}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.sl{font-size:11px;font-weight:700;color:var(--p);text-transform:uppercase;letter-spacing:.8px;
+    padding:4px 0 2px;border-bottom:2px solid var(--p2);margin:12px 0 8px}
+
+/* WEIGHT TABLE */
+.wt{width:100%;border-collapse:collapse;font-size:12px}
+.wt th{background:var(--p);color:#fff;padding:5px 3px;text-align:center;font-size:10px}
+.wt td{border:1px solid var(--bd);padding:0;text-align:center}
+.wt td input{width:100%;border:none;text-align:center;background:var(--yel);
+             padding:4px 2px;font-size:12px;height:32px;outline:none}
+.wt .cmp{background:var(--gn);font-weight:600;padding:4px}
+.wt .tot td{background:var(--bl);font-weight:700;padding:4px}
+.wt .chg td{background:var(--p);color:#fff;font-weight:700;padding:5px}
+
+/* RESULT TABLE */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.rt{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}
+.rt th{background:var(--p);color:#fff;padding:7px 6px;text-align:center;font-size:11px;white-space:nowrap}
+.rt td{border:1px solid var(--bd);padding:6px;vertical-align:middle}
+.rt tr:nth-child(even) td{background:#f8fafc}
+.rt .srow td{background:#fff8e1;font-style:italic;color:#7d6608}
+.rt .trow td{background:var(--p);color:#fff;font-weight:700;font-size:13px}
+.rt .shrow td{background:#f5f5f5;color:var(--mu);font-style:italic}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* BADGES */
+.bge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;white-space:nowrap}
+.bOr{background:#fff3e0;color:#bf360c}.bIn{background:#e3f2fd;color:#0d47a1}
+.bDe{background:#f3e5f5;color:#4a148c}.bLo{background:#e8f5e9;color:#1b5e20}
+.bAd{background:#fce4ec;color:#880e4f}.bFi{background:#fff8e1;color:#f57f17}
+.sok{color:var(--ok);font-weight:700}.swrn{color:var(--warn);font-weight:700}
+.sblk{color:var(--blk);font-weight:700}.sfij{color:var(--p2);font-weight:700}
+.scst{color:var(--mu);font-style:italic;font-size:11px}
+
+/* NETO TABLE */
+.nt{width:100%;border-collapse:collapse;font-size:13px}
+.nt th{background:var(--p);color:#fff;padding:8px 10px}
+.nt td{border:1px solid var(--bd);padding:8px 10px}
+.nt .cr td{background:#f8fafc}
+.nt .fr2 td{background:#fff8e1;font-style:italic}
+.nt .tr2 td{background:var(--p);color:#fff;font-weight:700;font-size:14px}
+.r{text-align:right}
+
+/* PILLS */
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.pill{flex:1;min-width:110px;background:var(--card);border:1px solid var(--bd);
+      border-radius:10px;padding:10px 12px;text-align:center}
+.pill .pl{font-size:10px;color:var(--mu);font-weight:600;text-transform:uppercase}
+.pill .pv{font-size:18px;font-weight:700;color:var(--p);margin-top:2px}
+
+/* MISC */
+.inf{padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:8px}
+.i-inf{background:#e3f2fd;color:#0d47a1;border:1px solid #bbdefb}
+.btn-r{display:block;width:100%;padding:14px;background:var(--p);color:#fff;border:none;
+       border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;margin-bottom:16px}
+@media(min-width:860px){.btn-r{display:none}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">CAP</div>
+  <div>
+    <h1>CAP Logistic · Cotizador</h1>
+    <div class="sub">v2.3 · offline</div>
+  </div>
+  <div class="hdr-acts">
+    <button class="ibtn" onclick="exportCSV()">⬇ CSV</button>
+    <button class="ibtn" onclick="window.print()">🖨</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" id="tab_f" onclick="showTab('f')">📋 Formulario</div>
+  <div class="tab" id="tab_r" onclick="showTab('r')">📊 Resultado <span class="tc" id="tc_badge">0</span></div>
+</div>
+
+<div class="page" id="main_page">
+
+  <!-- ═══ COLUMNA IZQUIERDA: FORMULARIO ═══ -->
+  <div class="col-l">
+
+    <!-- 📷 IMPORTAR DESDE FOTO/CORREO -->
+    <div class="card" id="card_ia">
+      <div class="ch ch2" onclick="tog(this)">📷 Importar desde foto o correo (IA) <span class="chv">▾</span></div>
+      <div class="coll"><div class="cb">
+        <div class="fg">
+          <label>API Key de OpenAI (no se guarda)</label>
+          <input id="ia_key" type="password" placeholder="sk-..." style="font-size:13px;height:40px">
+        </div>
+        <div id="ia_drop" onclick="document.getElementById('ia_file').click()"
+          style="border:2px dashed var(--p2);border-radius:10px;padding:20px;text-align:center;
+                 cursor:pointer;background:#f0f7ff;margin-bottom:10px;user-select:none">
+          <div style="font-size:28px">📎</div>
+          <div style="font-size:13px;color:var(--p);font-weight:600;margin-top:4px">
+            Toca para adjuntar foto o correo</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px">JPG, PNG, PDF, captura de pantalla</div>
+        </div>
+        <input id="ia_file" type="file" accept="image/*,.pdf" style="display:none" onchange="onFileSelect(event)">
+        <div id="ia_preview" style="display:none;margin-bottom:10px">
+          <img id="ia_img" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--bd)">
+        </div>
+        <button id="ia_btn" onclick="analizarImagen()"
+          style="width:100%;padding:12px;background:var(--p2);color:#fff;border:none;
+                 border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;display:none">
+          🔍 Analizar y completar formulario
+        </button>
+        <div id="ia_status" style="display:none;margin-top:8px;padding:10px;border-radius:8px;
+             font-size:12px;border:1px solid var(--bd)"></div>
+      </div></div>
+    </div>
+
+    <!-- OPERACIÓN -->
+    <div class="card">
+      <div class="ch" onclick="tog(this)">📋 Operación y Ruta <span class="chv">▾</span></div>
+      <div class="coll"><div class="cb">
+        <div class="fr">
+          <div class="fg"><label>Operación</label>
+            <select id="s_op" onchange="recalc()">
+              <option>Importacion</option><option>Exportacion</option>
+            </select></div>
+          <div class="fg"><label>Modalidad</label>
+            <select id="s_mod" onchange="onModChange()">
+              <option>Maritimo</option><option>Aereo</option>
+            </select></div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label>Incoterm</label>
+            <select id="s_inc" onchange="onIncChange()">
+              <option>EXW</option><option>FCA</option><option>FOB</option>
+              <option>DDU</option><option>DAP</option>
+            </select></div>
+          <div class="fg"><label>Variante</label>
+            <select id="s_var" onchange="recalc()">
+              <option>Base</option>
+            </select></div>
+        </div>
+        <div class="fg"><label>Naviera / Aerolínea</label>
+          <select id="s_nav" onchange="recalc()">
+            <option value="">— seleccionar —</option>
+            <option>CMA - CGM</option><option>COSCO / OOCL</option>
+            <option>EVERGREEN</option><option>HAPAG LLOYD</option>
+            <option>HYUNDAI</option><option>MAERSK</option>
+            <option>MSC DEL PERU</option><option>ONE</option>
+            <option>PIL</option><option>WAN HAI</option>
+            <option>YANG MING</option>
+          </select></div>
+        <div class="fr">
+          <div class="fg"><label>Origen</label>
+            <input id="s_ori" class="iy" type="text" placeholder="Lima, Callao…" oninput="recalc()"></div>
+          <div class="fg"><label>Destino</label>
+            <input id="s_des" class="iy" type="text" placeholder="Bogota, Miami…" oninput="recalc()"></div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- CARGA -->
+    <div class="card">
+      <div class="ch" onclick="tog(this)">📦 Carga <span class="chv">▾</span></div>
+      <div class="coll"><div class="cb">
+        <div class="fr">
+          <div class="fg"><label>Tipo contenedor</label>
+            <select id="s_cnt_tipo" onchange="recalc()">
+              <option>20ST</option><option>40ST</option><option selected>40HC</option><option>LCL</option>
+            </select></div>
+          <div class="fg"><label>Cantidad CNT</label>
+            <input id="s_cnt_qty" class="iy" type="number" value="1" min="1" oninput="recalc()"></div>
+        </div>
+        <div class="fr3">
+          <div class="fg"><label># BL / AWB</label>
+            <input id="s_bl_qty" class="iy" type="number" value="1" min="1" oninput="recalc()"></div>
+          <div class="fg"><label>Peso KG</label>
+            <input id="s_peso_kg" class="iy" type="number" value="0" min="0" step="0.1" oninput="recalc()"></div>
+          <div class="fg"><label>Valor CIF USD</label>
+            <input id="s_valor" class="iy" type="number" value="0" min="0" oninput="recalc()"></div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- TRANSPORTE LOCAL -->
+    <div class="card">
+      <div class="ch" onclick="tog(this)">🚛 Transporte Local <span class="chv">▾</span></div>
+      <div class="coll"><div class="cb">
+        <div class="fg"><label>Distrito de Recojo</label>
+          <select id="s_dis_r" onchange="recalc()">
+            <option value="">— sin recojo —</option>
+            <option>ANCON</option><option>ATE VITARTE</option><option>BARRANCO</option>
+            <option>BELLAVISTA</option><option>BREÑA</option><option>CAJAMARQUILLA</option>
+            <option>CALLAO CERCADO</option><option>CARABAYLLO</option><option>CARMEN DE LEGUA</option>
+            <option>CERCADO DE LIMA</option><option>CHACLACAYO</option><option>CHORRILLOS</option>
+            <option>CIENEGUILLA</option><option>CHOSICA</option><option>COMAS</option>
+            <option>EL AGUSTINO</option><option>HUACHIPA</option><option>INDEPENDENCIA</option>
+            <option>JESUS MARIA</option><option>LA MOLINA</option><option>LA PERLA</option>
+            <option>LA PUNTA</option><option>LA VICTORIA</option><option>LINCE</option>
+            <option>LOS OLIVOS</option><option>LURIN</option><option>MAGDALENA DEL MAR</option>
+            <option>MIRAFLORES</option><option>PACHACAMAC</option><option>PUEBLO LIBRE</option>
+            <option>PUENTE PIEDRA</option><option>RIMAC</option><option>SAN BORJA</option>
+            <option>SAN ISIDRO</option><option>SAN JUAN DE LURIGANCHO</option>
+            <option>SAN JUAN DE MIRAFLORES</option><option>SAN LUIS</option>
+            <option>SAN MARTIN DE PORRES</option><option>SAN MIGUEL</option>
+            <option>SANTA ANITA</option><option>SANTA CLARA</option><option>SANTA ROSA</option>
+            <option>SANTIAGO DE SURCO</option><option>SURQUILLO</option>
+            <option>VENTANILLA</option><option>VILLA EL SALVADOR</option>
+            <option>VILLA MARIA DEL TRIUNFO</option>
+          </select></div>
+        <div class="fg"><label>Distrito de Entrega</label>
+          <select id="s_dis_e" onchange="recalc()">
+            <option value="">— sin entrega —</option>
+            <option>ANCON</option><option>ATE VITARTE</option><option>BARRANCO</option>
+            <option>BELLAVISTA</option><option>BREÑA</option><option>CAJAMARQUILLA</option>
+            <option>CALLAO CERCADO</option><option>CARABAYLLO</option><option>CARMEN DE LEGUA</option>
+            <option>CERCADO DE LIMA</option><option>CHACLACAYO</option><option>CHORRILLOS</option>
+            <option>CIENEGUILLA</option><option>CHOSICA</option><option>COMAS</option>
+            <option>EL AGUSTINO</option><option>HUACHIPA</option><option>INDEPENDENCIA</option>
+            <option>JESUS MARIA</option><option>LA MOLINA</option><option>LA PERLA</option>
+            <option>LA PUNTA</option><option>LA VICTORIA</option><option>LINCE</option>
+            <option>LOS OLIVOS</option><option>LURIN</option><option>MAGDALENA DEL MAR</option>
+            <option>MIRAFLORES</option><option>PACHACAMAC</option><option>PUEBLO LIBRE</option>
+            <option>PUENTE PIEDRA</option><option>RIMAC</option><option>SAN BORJA</option>
+            <option>SAN ISIDRO</option><option>SAN JUAN DE LURIGANCHO</option>
+            <option>SAN JUAN DE MIRAFLORES</option><option>SAN LUIS</option>
+            <option>SAN MARTIN DE PORRES</option><option>SAN MIGUEL</option>
+            <option>SANTA ANITA</option><option>SANTA CLARA</option><option>SANTA ROSA</option>
+            <option>SANTIAGO DE SURCO</option><option>SURQUILLO</option>
+            <option>VENTANILLA</option><option>VILLA EL SALVADOR</option>
+            <option>VILLA MARIA DEL TRIUNFO</option>
+          </select></div>
+        <div class="fr">
+          <div class="fg"><label>Tipo tarifa</label>
+            <select id="s_tip_transp" onchange="recalc()">
+              <option>CNT 20</option><option selected>CNT 40</option><option>Peso KG</option>
+            </select></div>
+          <div class="fg"><label>Moneda transp.</label>
+            <select id="s_mon_t" onchange="recalc()">
+              <option selected>PEN</option><option>USD</option>
+            </select></div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- PARÁMETROS -->
+    <div class="card">
+      <div class="ch" onclick="tog(this)">⚙️ Parámetros <span class="chv">▾</span></div>
+      <div class="coll"><div class="cb">
+        <div class="fr">
+          <div class="fg"><label>Depósito / Terminal</label>
+            <select id="s_dep" onchange="recalc()">
+              <option>APM</option><option>DPW</option><option selected>DT</option>
+              <option value="">Sin depósito</option>
+            </select></div>
+          <div class="fg"><label>T/C PEN→USD</label>
+            <input id="s_tc" class="iy" type="number" value="3.75" step="0.01" oninput="recalc()"></div>
+        </div>
+        <div class="fr3">
+          <div class="fg"><label>IGV %</label>
+            <input id="s_igv" class="iy" type="number" value="18" step="0.1" oninput="recalc()"></div>
+          <div class="fg"><label>Margen obj %</label>
+            <input id="s_mobj" class="iy" type="number" value="15" step="0.5" oninput="recalc()"></div>
+          <div class="fg"><label>Mg. Gerencia %</label>
+            <input id="s_mger" class="iy" type="number" value="10" step="0.5" oninput="recalc()"></div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label>¿Crédito?</label>
+            <select id="s_cred" onchange="recalc()">
+              <option>No</option><option>Si</option>
+            </select></div>
+          <div class="fg"><label>Días crédito</label>
+            <select id="s_dias" onchange="recalc()">
+              <option value="15">15 días (0.75%)</option>
+              <option value="30" selected>30 días (1.50%)</option>
+              <option value="60">60 días (3.00%)</option>
+            </select></div>
+        </div>
+        <div class="sl">Storage y extras (si aplica)</div>
+        <div class="fr">
+          <div class="fg"><label>Storage LCL $</label>
+            <input id="s_st_lcl" class="iy" type="number" value="0" min="0" oninput="recalc()"></div>
+          <div class="fg"><label>Storage Aéreo $</label>
+            <input id="s_st_ae" class="iy" type="number" value="0" min="0" oninput="recalc()"></div>
+        </div>
+        <div class="fg"><label>Resguardo / Escolta $</label>
+          <input id="s_rsg" class="iy" type="number" value="0" min="0" oninput="recalc()"></div>
+      </div></div>
+    </div>
+
+    <!-- CALC AÉREO -->
+    <div class="card" id="card_aereo" style="display:none">
+      <div class="ch ch2" onclick="tog(this)">✈️ Calculadora Peso Aéreo <span class="chv">▾</span></div>
+      <div class="coll"><div class="cb" style="overflow-x:auto">
+        <table class="wt">
+          <thead><tr><th>#</th><th>L cm</th><th>A cm</th><th>H cm</th>
+            <th>Cant</th><th>Kg/pza</th><th>KG Real</th><th>KG Vol</th></tr></thead>
+          <tbody id="wt_rows"></tbody>
+          <tfoot>
+            <tr class="tot"><td colspan="6" style="text-align:right;font-weight:700;padding:4px">TOTAL</td>
+              <td class="cmp" id="wt_rt">0.00</td><td class="cmp" id="wt_vt">0.00</td></tr>
+            <tr class="chg"><td colspan="6" style="text-align:right;padding:5px">⚡ Chargeable</td>
+              <td colspan="2" id="wt_ch">0.00 kg</td></tr>
+          </tfoot>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- FLETE MANUAL -->
+    <div class="card">
+      <div class="ch ch2" onclick="tog(this)">💲 Flete / Tarifas Manuales <span class="chv chv rot">▾</span></div>
+      <div class="coll closed"><div class="cb">
+        <div class="inf i-inf">Solo completa si el flete no se auto-calcula.</div>
+        <div class="fr">
+          <div class="fg"><label>Ocean Freight ($/CNT)</label>
+            <input id="t_of" class="iy" type="number" value="0" min="0" step="0.01" oninput="recalc()"></div>
+          <div class="fg"><label>Doc Fee ($/BL)</label>
+            <input id="t_df" class="iy" type="number" value="0" min="0" step="0.01" oninput="recalc()"></div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label>Flete Aéreo $/kg</label>
+            <input id="t_fa_kg" class="iy" type="number" value="0" min="0" step="0.01" oninput="recalc()"></div>
+          <div class="fg"><label>Mínimo Aéreo $</label>
+            <input id="t_fa_min" class="iy" type="number" value="0" min="0" step="0.01" oninput="recalc()"></div>
+        </div>
+        <div class="fg"><label>Transfer umbral $</label>
+          <input id="t_tumbl" class="iy" type="number" value="1000" step="100" oninput="recalc()"></div>
+      </div></div>
+    </div>
+
+    <button class="btn-r" onclick="showTab('r')">Ver Resultado →</button>
+
+  </div><!-- col-l -->
+
+  <!-- ═══ COLUMNA DERECHA: RESULTADOS ═══ -->
+  <div class="col-r">
+
+    <div class="card">
+      <div class="ch">📊 Cálculo de Costos</div>
+      <div class="cb" style="padding:8px">
+        <div id="pills" class="pills" style="display:none"></div>
+        <div id="rt_alert" class="inf i-inf">Completa Modalidad + Incoterm para ver el cálculo.</div>
+        <div class="tbl-wrap">
+          <table class="rt" id="rtable" style="display:none">
+            <thead><tr>
+              <th>#</th><th style="text-align:left">Concepto</th><th>Fact.</th><th>Tipo</th>
+              <th>Qty</th><th>Mon</th><th>Costo U.</th>
+              <th>Neto Costo</th><th>Mg%</th><th>Precio Venta</th><th>Estado</th>
+            </tr></thead>
+            <tbody id="rt_body"></tbody>
+            <tfoot id="rt_foot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch">📈 Neto Considerando</div>
+      <div class="cb" style="padding:8px">
+        <table class="nt">
+          <thead><tr>
+            <th>Tipo de Gasto</th>
+            <th class="r">Neto Costo $</th>
+            <th class="r">Precio Venta $</th>
+            <th class="r">Margen</th>
+          </tr></thead>
+          <tbody id="nt_body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <button class="btn-r" onclick="showTab('f')" style="background:var(--mu)">← Volver al Formulario</button>
+
+  </div><!-- col-r -->
+
+</div><!-- page -->
+
+<script>
+// ══════════════════════════════════════════════
+// DATOS
+// ══════════════════════════════════════════════
+const THC_VB=[
+  {r:'Importacion',n:'CMA - CGM',    c:'THC',t:64.9},
+  {r:'Importacion',n:'CMA - CGM',    c:'Visto Bueno BL',t:28.125},
+  {r:'Importacion',n:'CMA - CGM',    c:'Visto Bueno Contenedor',t:225},
+  {r:'Importacion',n:'COSCO / OOCL', c:'THC',t:86},
+  {r:'Importacion',n:'COSCO / OOCL', c:'Visto Bueno BL',t:0},
+  {r:'Importacion',n:'COSCO / OOCL', c:'Visto Bueno Contenedor',t:200},
+  {r:'Importacion',n:'EVERGREEN',    c:'THC',t:89},
+  {r:'Importacion',n:'EVERGREEN',    c:'Visto Bueno BL',t:65},
+  {r:'Importacion',n:'EVERGREEN',    c:'Visto Bueno Contenedor',t:230},
+  {r:'Importacion',n:'HAPAG LLOYD',  c:'THC',t:95},
+  {r:'Importacion',n:'HAPAG LLOYD',  c:'Visto Bueno BL',t:100},
+  {r:'Importacion',n:'HAPAG LLOYD',  c:'Visto Bueno Contenedor',t:195},
+  {r:'Importacion',n:'HYUNDAI',      c:'THC',t:0},
+  {r:'Importacion',n:'HYUNDAI',      c:'Visto Bueno BL',t:121.6},
+  {r:'Importacion',n:'HYUNDAI',      c:'Visto Bueno Contenedor',t:170.67},
+  {r:'Importacion',n:'MAERSK',       c:'THC',t:0},
+  {r:'Importacion',n:'MAERSK',       c:'Visto Bueno BL',t:0},
+  {r:'Importacion',n:'MAERSK',       c:'Visto Bueno Contenedor',t:215},
+  {r:'Importacion',n:'MSC DEL PERU', c:'THC',t:0},
+  {r:'Importacion',n:'MSC DEL PERU', c:'Visto Bueno BL',t:120},
+  {r:'Importacion',n:'MSC DEL PERU', c:'Visto Bueno Contenedor',t:174},
+  {r:'Importacion',n:'ONE',          c:'Visto Bueno BL',t:125},
+  {r:'Importacion',n:'ONE',          c:'Visto Bueno Contenedor',t:215},
+  {r:'Importacion',n:'PIL',          c:'THC',t:0},
+  {r:'Importacion',n:'PIL',          c:'Visto Bueno BL',t:188},
+  {r:'Importacion',n:'PIL',          c:'Visto Bueno Contenedor',t:161},
+  {r:'Importacion',n:'WAN HAI',      c:'THC',t:0},
+  {r:'Importacion',n:'WAN HAI',      c:'Visto Bueno BL',t:135},
+  {r:'Importacion',n:'WAN HAI',      c:'Visto Bueno Contenedor',t:220},
+  {r:'Importacion',n:'YANG MING',    c:'THC',t:0},
+  {r:'Importacion',n:'YANG MING',    c:'Visto Bueno BL',t:140},
+  {r:'Importacion',n:'YANG MING',    c:'Visto Bueno Contenedor',t:216},
+  {r:'Exportacion',n:'CMA - CGM',    c:'THC',t:0},
+  {r:'Exportacion',n:'CMA - CGM',    c:'Visto Bueno BL',t:26.75},
+  {r:'Exportacion',n:'CMA - CGM',    c:'Visto Bueno Contenedor',t:214},
+  {r:'Exportacion',n:'COSCO / OOCL', c:'THC',t:86},
+  {r:'Exportacion',n:'COSCO / OOCL', c:'Visto Bueno BL',t:0},
+  {r:'Exportacion',n:'COSCO / OOCL', c:'Visto Bueno Contenedor',t:100},
+  {r:'Exportacion',n:'EVERGREEN',    c:'THC',t:0},
+  {r:'Exportacion',n:'EVERGREEN',    c:'Visto Bueno BL',t:65},
+  {r:'Exportacion',n:'EVERGREEN',    c:'Visto Bueno Contenedor',t:162},
+  {r:'Exportacion',n:'HAPAG LLOYD',  c:'THC',t:75},
+  {r:'Exportacion',n:'HAPAG LLOYD',  c:'Visto Bueno BL',t:100},
+  {r:'Exportacion',n:'HAPAG LLOYD',  c:'Visto Bueno Contenedor',t:157},
+  {r:'Exportacion',n:'HYUNDAI',      c:'THC',t:0},
+  {r:'Exportacion',n:'HYUNDAI',      c:'Visto Bueno BL',t:121.6},
+  {r:'Exportacion',n:'HYUNDAI',      c:'Visto Bueno Contenedor',t:130.67},
+  {r:'Exportacion',n:'MAERSK',       c:'THC',t:0},
+  {r:'Exportacion',n:'MAERSK',       c:'Visto Bueno BL',t:0},
+  {r:'Exportacion',n:'MAERSK',       c:'Visto Bueno Contenedor',t:175},
+  {r:'Exportacion',n:'MSC DEL PERU', c:'THC',t:0},
+  {r:'Exportacion',n:'MSC DEL PERU', c:'Visto Bueno BL',t:120},
+  {r:'Exportacion',n:'MSC DEL PERU', c:'Visto Bueno Contenedor',t:135},
+  {r:'Exportacion',n:'ONE',          c:'THC',t:0},
+  {r:'Exportacion',n:'ONE',          c:'Visto Bueno BL',t:125},
+  {r:'Exportacion',n:'ONE',          c:'Visto Bueno Contenedor',t:175},
+  {r:'Exportacion',n:'PIL',          c:'THC',t:0},
+  {r:'Exportacion',n:'PIL',          c:'Visto Bueno BL',t:160},
+  {r:'Exportacion',n:'PIL',          c:'Visto Bueno Contenedor',t:161},
+  {r:'Exportacion',n:'WAN HAI',      c:'THC',t:0},
+  {r:'Exportacion',n:'WAN HAI',      c:'Visto Bueno BL',t:135},
+  {r:'Exportacion',n:'WAN HAI',      c:'Visto Bueno Contenedor',t:130},
+  {r:'Exportacion',n:'YANG MING',    c:'THC',t:0},
+  {r:'Exportacion',n:'YANG MING',    c:'Visto Bueno BL',t:100},
+  {r:'Exportacion',n:'YANG MING',    c:'Visto Bueno Contenedor',t:220},
+];
+const CARGOS_NAV=[
+  {r:'Importacion',n:'CMA - CGM',    c:'Gate in',t:205},
+  {r:'Exportacion',n:'CMA - CGM',    c:'Gate Out',t:150},
+  {r:'Importacion',n:'COSCO / OOCL', c:'Gate in',t:197.5},
+  {r:'Exportacion',n:'COSCO / OOCL', c:'Gate Out',t:125.5},
+  {r:'Importacion',n:'EVERGREEN',    c:'Gate in',t:180},
+  {r:'Exportacion',n:'EVERGREEN',    c:'Gate Out',t:120.5},
+  {r:'Importacion',n:'HAPAG LLOYD',  c:'Gate in',t:225},
+  {r:'Exportacion',n:'HAPAG LLOYD',  c:'Gate Out',t:160},
+  {r:'Importacion',n:'HYUNDAI',      c:'Gate in',t:240},
+  {r:'Exportacion',n:'HYUNDAI',      c:'Gate Out',t:165},
+  {r:'Importacion',n:'MAERSK',       c:'Gate in',t:237},
+  {r:'Exportacion',n:'MAERSK',       c:'Gate Out',t:179},
+  {r:'Importacion',n:'MSC DEL PERU', c:'Gate in',t:220},
+  {r:'Exportacion',n:'MSC DEL PERU', c:'Gate Out',t:152},
+  {r:'Importacion',n:'ONE',          c:'Gate in',t:210},
+  {r:'Exportacion',n:'ONE',          c:'Gate Out',t:142},
+  {r:'Importacion',n:'PIL',          c:'Gate in',t:217},
+  {r:'Exportacion',n:'PIL',          c:'Gate Out',t:152},
+  {r:'Importacion',n:'WAN HAI',      c:'Gate in',t:180},
+  {r:'Exportacion',n:'WAN HAI',      c:'Gate Out',t:125},
+  {r:'Importacion',n:'YANG MING',    c:'Gate in',t:214},
+  {r:'Exportacion',n:'YANG MING',    c:'Gate Out',t:135},
+  {r:'Importacion',n:'HAPAG LLOYD',  c:'Doc Fee',t:60},
+];
+const STORAGE={
+  APM:{'20ST':{I:335,E:245},'40ST':{I:490,E:376},'40HC':{I:513,E:399}},
+  DPW:{'20ST':{I:280,E:240},'40ST':{I:390,E:350},'40HC':{I:417,E:377}},
+  DT: {'20ST':{I:366,E:342},'40ST':{I:505,E:460},'40HC':{I:532,E:487}},
+};
+const FLETE_MAR=[
+  {ori:'Callao',des:'Buenaventura',nav:'MAERSK',t:400},
+];
+const FLETE_AER=[
+  {ori:'Lima',des:'Bogota',tKg:0.58,min:200},
+];
+const ZONAS={
+  'CALLAO CERCADO':'ZONA 1','LA PUNTA':'ZONA 1','BELLAVISTA':'ZONA 1','LA PERLA':'ZONA 1',
+  'SAN MIGUEL':'ZONA 1','CARMEN DE LEGUA':'ZONA 1',
+  'VENTANILLA':'ZONA 2','SAN MARTIN DE PORRES':'ZONA 2','LOS OLIVOS':'ZONA 2',
+  'MIRAFLORES':'ZONA 2','LA VICTORIA':'ZONA 2','PUEBLO LIBRE':'ZONA 2','JESUS MARIA':'ZONA 2',
+  'LINCE':'ZONA 2','MAGDALENA DEL MAR':'ZONA 2','SAN ISIDRO':'ZONA 2',
+  'BREÑA':'ZONA 2','CERCADO DE LIMA':'ZONA 2',
+  'SAN BORJA':'ZONA 3','SURQUILLO':'ZONA 3','BARRANCO':'ZONA 3',
+  'SANTIAGO DE SURCO':'ZONA 3','ATE VITARTE':'ZONA 3','SAN JUAN DE LURIGANCHO':'ZONA 3',
+  'SAN LUIS':'ZONA 3','SAN JUAN DE MIRAFLORES':'ZONA 3','PUENTE PIEDRA':'ZONA 3',
+  'COMAS':'ZONA 3','RIMAC':'ZONA 3','SANTA ANITA':'ZONA 3','INDEPENDENCIA':'ZONA 3','EL AGUSTINO':'ZONA 3',
+  'CARABAYLLO':'ZONA 4','CHORRILLOS':'ZONA 4','VILLA MARIA DEL TRIUNFO':'ZONA 4',
+  'LA MOLINA':'ZONA 4','SANTA ROSA':'ZONA 4','ANCON':'ZONA 4',
+  'SANTA CLARA':'ZONA 4 II','CHACLACAYO':'ZONA 4 II','PACHACAMAC':'ZONA 4 II',
+  'HUACHIPA':'ZONA 4 II','LURIN':'ZONA 4 II','CAJAMARQUILLA':'ZONA 4 II',
+  'CIENEGUILLA':'ZONA 4 II','CHOSICA':'ZONA 4 II','VILLA EL SALVADOR':'ZONA 4 II',
+};
+const TCNT={
+  'CNT 20':{'ZONA 1':800,'ZONA 2':900,'ZONA 3':1000,'ZONA 4':1150,'ZONA 4 II':1350},
+  'CNT 40':{'ZONA 1':800,'ZONA 2':900,'ZONA 3':1000,'ZONA 4':1150,'ZONA 4 II':1350},
+};
+const TKG=[
+  {a:1,   b:50,   'ZONA 1':240,'ZONA 2':270,'ZONA 3':290,'ZONA 4':310,'ZONA 4 II':330},
+  {a:51,  b:100,  'ZONA 1':250,'ZONA 2':280,'ZONA 3':310,'ZONA 4':330,'ZONA 4 II':350},
+  {a:101, b:200,  'ZONA 1':280,'ZONA 2':310,'ZONA 3':330,'ZONA 4':360,'ZONA 4 II':390},
+  {a:201, b:400,  'ZONA 1':340,'ZONA 2':350,'ZONA 3':380,'ZONA 4':410,'ZONA 4 II':430},
+  {a:401, b:600,  'ZONA 1':290,'ZONA 2':370,'ZONA 3':390,'ZONA 4':420,'ZONA 4 II':470},
+  {a:601, b:800,  'ZONA 1':360,'ZONA 2':390,'ZONA 3':420,'ZONA 4':430,'ZONA 4 II':490},
+  {a:801, b:1000, 'ZONA 1':380,'ZONA 2':400,'ZONA 3':440,'ZONA 4':470,'ZONA 4 II':550},
+  {a:1001,b:2000, 'ZONA 1':350,'ZONA 2':440,'ZONA 3':480,'ZONA 4':510,'ZONA 4 II':560},
+  {a:2001,b:3000, 'ZONA 1':440,'ZONA 2':470,'ZONA 3':520,'ZONA 4':560,'ZONA 4 II':580},
+  {a:3001,b:4000, 'ZONA 1':460,'ZONA 2':520,'ZONA 3':570,'ZONA 4':640,'ZONA 4 II':650},
+  {a:4001,b:5000, 'ZONA 1':540,'ZONA 2':610,'ZONA 3':640,'ZONA 4':680,'ZONA 4 II':690},
+  {a:5001,b:6000, 'ZONA 1':560,'ZONA 2':640,'ZONA 3':660,'ZONA 4':740,'ZONA 4 II':780},
+  {a:6001,b:7000, 'ZONA 1':530,'ZONA 2':670,'ZONA 3':680,'ZONA 4':760,'ZONA 4 II':800},
+  {a:7001,b:99999,'ZONA 1':610,'ZONA 2':690,'ZONA 3':710,'ZONA 4':780,'ZONA 4 II':830},
+];
+const REGLAS={mOk:0.15,mGer:0.10,trU:1000,trA:125,trB:75,
+              adP:0.0025,adFI:20,adFE:90,adMI:70};
+const INC_MAP={Maritimo:['EXW','FCA','FOB','DDU','DAP'],Aereo:['EXW','FCA','DDU','DAP']};
+const CI=[
+  {m:'Maritimo',i:'EXW',v:'Base',o:1, c:'Recojo',            f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'EXW',v:'Base',o:2, c:'Gate Out',          f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'EXW',v:'Base',o:3, c:'Visto Bueno',       f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'EXW',v:'Base',o:4, c:'Storage',           f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'EXW',v:'Base',o:5, c:'Customs clearance', f:'Agente',t:'Aduanas'},
+  {m:'Maritimo',i:'EXW',v:'Base',o:6, c:'OTHC',              f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'EXW',v:'Base',o:7, c:'Handling',          f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'EXW',v:'Base',o:8, c:'Transmision',       f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'EXW',v:'Base',o:9, c:'Transfer',          f:'Agente',t:'Local'},
+  {m:'Maritimo',i:'EXW',v:'Base',o:10,c:'Ocean Freight',     f:'Agente',t:'Internacional'},
+  {m:'Maritimo',i:'FCA',v:'Base',o:1, c:'Recojo',            f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'FCA',v:'Base',o:2, c:'Gate Out',          f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'FCA',v:'Base',o:3, c:'Visto Bueno',       f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'FCA',v:'Base',o:4, c:'Storage',           f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'FCA',v:'Base',o:5, c:'OTHC',              f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'FCA',v:'Base',o:6, c:'Handling',          f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'FCA',v:'Base',o:7, c:'Transmision',       f:'Agente',t:'Origen'},
+  {m:'Maritimo',i:'FCA',v:'Base',o:8, c:'Transfer',          f:'Agente',t:'Local'},
+  {m:'Maritimo',i:'FCA',v:'Base',o:9, c:'Ocean Freight',     f:'Agente',t:'Internacional'},
+  {m:'Maritimo',i:'FOB',v:'Base',o:1, c:'Ocean Freight',     f:'Agente',t:'Internacional'},
+  {m:'Maritimo',i:'FOB',v:'Base',o:2, c:'OTHC',              f:'Shipper',t:'Origen'},
+  {m:'Maritimo',i:'FOB',v:'Base',o:3, c:'Handling',          f:'Shipper',t:'Origen'},
+  {m:'Maritimo',i:'FOB',v:'Base',o:4, c:'Transmision',       f:'Shipper',t:'Origen'},
+  {m:'Maritimo',i:'FOB',v:'Base',o:5, c:'Transfer',          f:'Agente',t:'Local'},
+  {m:'Maritimo',i:'DDU',v:'Base',o:1, c:'Entrega',           f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DDU',v:'Base',o:2, c:'Customs clearance', f:'Agente',t:'Aduanas'},
+  {m:'Maritimo',i:'DDU',v:'Base',o:3, c:'Storage',           f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DDU',v:'Base',o:4, c:'Gate in',           f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DDU',v:'Base',o:5, c:'Visto Bueno',       f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DDU',v:'Base',o:6, c:'DTHC',              f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DDU',v:'Base',o:7, c:'Handling',          f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DDU',v:'Base',o:8, c:'Transmision',       f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DDU',v:'Base',o:9, c:'Transfer',          f:'Agente',t:'Local'},
+  {m:'Maritimo',i:'DAP',v:'Base',o:1, c:'Entrega',           f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DAP',v:'Base',o:2, c:'Storage',           f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DAP',v:'Base',o:3, c:'Gate in',           f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DAP',v:'Base',o:4, c:'Visto Bueno',       f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DAP',v:'Base',o:5, c:'DTHC',              f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DAP',v:'Base',o:6, c:'Handling',          f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DAP',v:'Base',o:7, c:'Transmision',       f:'Agente',t:'Destino'},
+  {m:'Maritimo',i:'DAP',v:'Base',o:8, c:'Transfer',          f:'Agente',t:'Local'},
+  {m:'Aereo',i:'EXW',v:'Base',o:1,    c:'Recojo',              f:'Agente',t:'Origen'},
+  {m:'Aereo',i:'EXW',v:'Base',o:2,    c:'Customs clearance',   f:'Agente',t:'Aduanas'},
+  {m:'Aereo',i:'EXW',v:'Base',o:3,    c:'Flete Aereo y Gastos',f:'Agente',t:'Internacional'},
+  {m:'Aereo',i:'EXW',v:'Base',o:4,    c:'Handling',            f:'Agente',t:'Origen'},
+  {m:'Aereo',i:'EXW',v:'Base',o:5,    c:'Doc Fee',             f:'Agente',t:'Origen'},
+  {m:'Aereo',i:'EXW',v:'Base',o:6,    c:'Transfer',            f:'Agente',t:'Local'},
+  {m:'Aereo',i:'FCA',v:'Con recojo',o:1,c:'Recojo',            f:'Agente',t:'Origen'},
+  {m:'Aereo',i:'FCA',v:'Con recojo',o:2,c:'Flete Aereo y Gastos',f:'Agente',t:'Internacional'},
+  {m:'Aereo',i:'FCA',v:'Con recojo',o:3,c:'Handling',          f:'Agente',t:'Origen'},
+  {m:'Aereo',i:'FCA',v:'Con recojo',o:4,c:'Transmision',       f:'Agente',t:'Origen'},
+  {m:'Aereo',i:'FCA',v:'Con recojo',o:5,c:'Transfer',          f:'Agente',t:'Local'},
+  {m:'Aereo',i:'FCA',v:'Sin recojo',o:1,c:'Flete Aereo y Gastos',f:'Agente',t:'Internacional'},
+  {m:'Aereo',i:'FCA',v:'Sin recojo',o:2,c:'Handling',          f:'Shipper',t:'Origen'},
+  {m:'Aereo',i:'FCA',v:'Sin recojo',o:3,c:'Doc Fee',           f:'Shipper',t:'Origen'},
+  {m:'Aereo',i:'FCA',v:'Sin recojo',o:4,c:'Transfer',          f:'Agente',t:'Local'},
+  {m:'Aereo',i:'DDU',v:'Base',o:1,    c:'Entrega',             f:'Agente',t:'Destino'},
+  {m:'Aereo',i:'DDU',v:'Base',o:2,    c:'Customs clearance',   f:'Agente',t:'Aduanas'},
+  {m:'Aereo',i:'DDU',v:'Base',o:3,    c:'Storage',             f:'Agente',t:'Destino'},
+  {m:'Aereo',i:'DDU',v:'Base',o:4,    c:'Handling aerolinea',  f:'Agente',t:'Destino'},
+  {m:'Aereo',i:'DDU',v:'Base',o:5,    c:'Doc Fee',             f:'Agente',t:'Destino'},
+  {m:'Aereo',i:'DDU',v:'Base',o:6,    c:'Transmision',         f:'Agente',t:'Destino'},
+  {m:'Aereo',i:'DDU',v:'Base',o:7,    c:'Transfer',            f:'Agente',t:'Local'},
+  {m:'Aereo',i:'DAP',v:'Base',o:1,    c:'Entrega',             f:'Agente',t:'Destino'},
+  {m:'Aereo',i:'DAP',v:'Base',o:2,    c:'Storage',             f:'Agente',t:'Destino'},
+  {m:'Aereo',i:'DAP',v:'Base',o:3,    c:'Handling aerolinea',  f:'Agente',t:'Destino'},
+  {m:'Aereo',i:'DAP',v:'Base',o:4,    c:'Doc Fee',             f:'Agente',t:'Destino'},
+  {m:'Aereo',i:'DAP',v:'Base',o:5,    c:'Transmision',         f:'Agente',t:'Destino'},
+  {m:'Aereo',i:'DAP',v:'Base',o:6,    c:'Transfer',            f:'Agente',t:'Local'},
+];
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+const gv = id => { const e = document.getElementById(id); return e ? e.value : ''; };
+const gn = id => (+gv(id)) || 0;
+const f2 = x => ((+x)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct= x => (((+x)||0)*100).toFixed(1)+'%';
+
+const lkTHC = (r,n,c) => { const d=THC_VB.find(x=>x.r===r&&x.n===n&&x.c===c); return d?d.t:null; };
+const lkNav = (r,n,c) => { const d=CARGOS_NAV.find(x=>x.r===r&&x.n===n&&x.c===c); return d?d.t:null; };
+const lkSto = (dep,ct,op) => { try{return STORAGE[dep][ct][op==='Importacion'?'I':'E']||0;}catch(e){return 0;} };
+const lkFM  = (ori,des,nav) => {
+  const d=FLETE_MAR.find(x=>x.ori.toLowerCase()===ori.toLowerCase()&&x.des.toLowerCase()===des.toLowerCase()&&(!x.nav||x.nav===nav));
+  return d?d.t:null;
+};
+const lkFA  = (ori,des) => FLETE_AER.find(x=>x.ori.toLowerCase()===ori.toLowerCase()&&x.des.toLowerCase()===des.toLowerCase())||null;
+const lkTrp = (tip,dis,kg) => {
+  const z = ZONAS[dis];
+  if(!z) return null;
+  if(tip==='CNT 20'||tip==='CNT 40') return (TCNT[tip]||{})[z]||null;
+  const b = TKG.find(x=>kg>=x.a&&kg<=x.b);
+  return b ? b[z]||null : null;
+};
+
+// ══════════════════════════════════════════════
+// TABS — CSS class only, NO DOM manipulation
+// ══════════════════════════════════════════════
+function showTab(t){
+  document.getElementById('tab_f').classList.toggle('active', t==='f');
+  document.getElementById('tab_r').classList.toggle('active', t==='r');
+  const page = document.getElementById('main_page');
+  if(t==='r') page.classList.add('show-r');
+  else page.classList.remove('show-r');
+}
+
+// ACCORDION
+function tog(ch){
+  const coll = ch.nextElementSibling;
+  coll.classList.toggle('closed');
+  const chv = ch.querySelector('.chv');
+  if(chv) chv.classList.toggle('rot', coll.classList.contains('closed'));
+}
+
+// INCOTERM
+function onModChange(){
+  const mod = gv('s_mod');
+  const el  = document.getElementById('s_inc');
+  const cur = el.value;
+  el.innerHTML = '';
+  (INC_MAP[mod]||['EXW']).forEach(x=>{
+    const o = document.createElement('option');
+    o.value = x; o.textContent = x;
+    if(x===cur) o.selected=true;
+    el.appendChild(o);
+  });
+  document.getElementById('card_aereo').style.display = mod==='Aereo'?'block':'none';
+  onIncChange();
+}
+function onIncChange(){
+  const mod=gv('s_mod'), inc=gv('s_inc');
+  const el=document.getElementById('s_var');
+  const cur=el.value;
+  el.innerHTML='';
+  const vars=(mod==='Aereo'&&inc==='FCA')?['Con recojo','Sin recojo']:['Base'];
+  vars.forEach(x=>{
+    const o=document.createElement('option');
+    o.value=x; o.textContent=x;
+    if(x===cur) o.selected=true;
+    el.appendChild(o);
+  });
+  recalc();
+}
+
+// PESO AÉREO
+function buildWt(){
+  const tb=document.getElementById('wt_rows');
+  if(!tb) return;
+  tb.innerHTML='';
+  for(let i=1;i<=5;i++){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="padding:4px">${i}</td>
+      <td><input type="number" id="wl${i}" min="0" step="0.1" oninput="calcWt()"></td>
+      <td><input type="number" id="ww${i}" min="0" step="0.1" oninput="calcWt()"></td>
+      <td><input type="number" id="wh${i}" min="0" step="0.1" oninput="calcWt()"></td>
+      <td><input type="number" id="wc${i}" min="0" step="1"   oninput="calcWt()"></td>
+      <td><input type="number" id="wp${i}" min="0" step="0.01" oninput="calcWt()"></td>
+      <td class="cmp" id="wr${i}">—</td><td class="cmp" id="wv${i}">—</td>`;
+    tb.appendChild(tr);
+  }
+}
+function calcWt(){
+  let rt=0,vt=0;
+  for(let i=1;i<=5;i++){
+    const l=gn('wl'+i),w=gn('ww'+i),h=gn('wh'+i),c=gn('wc'+i),p=gn('wp'+i);
+    const r=c*p, vol=l*w*h*c/6000;
+    document.getElementById('wr'+i).textContent = r>0?f2(r):'—';
+    document.getElementById('wv'+i).textContent = vol>0?f2(vol):'—';
+    rt+=r; vt+=vol;
+  }
+  document.getElementById('wt_rt').textContent=f2(rt);
+  document.getElementById('wt_vt').textContent=f2(vt);
+  const ch=(rt+vt>0)?Math.max(rt,vt):0;
+  document.getElementById('wt_ch').textContent=f2(ch)+' kg';
+  recalc();
+}
+function getPA(){
+  let rt=0,vt=0;
+  for(let i=1;i<=5;i++){
+    const l=gn('wl'+i),w=gn('ww'+i),h=gn('wh'+i),c=gn('wc'+i),p=gn('wp'+i);
+    rt+=c*p; vt+=l*w*h*c/6000;
+  }
+  return (rt+vt>0)?Math.max(rt,vt):gn('s_peso_kg');
+}
+
+// ══════════════════════════════════════════════
+// COSTO POR CONCEPTO
+// ══════════════════════════════════════════════
+function getCosto(cc, s){
+  const{op,mod,nav,ori,des,ct,cq,bq,kg,pa,cif,dr,de,tip,mont,dep,tc,stL,stA,rsg,tOf,tDf,tFkg,tFmin}=s;
+  let cu=0, qty=1, mon='USD', fijo=false, vFija=null, sVenta=false, manual=false;
+
+  switch(cc){
+    case 'Recojo':
+      qty=1; mon=mont;
+      { const t=lkTrp(tip,dr,kg); cu=t!==null?t:0; manual=t===null; }
+      break;
+    case 'Entrega':
+      qty=1; mon=mont;
+      { const t=lkTrp(tip,de,kg); cu=t!==null?t:0; manual=t===null; }
+      break;
+    case 'Gate Out':
+      qty=cq; { const t=lkNav('Exportacion',nav,'Gate Out'); cu=t||0; manual=t===null; }
+      break;
+    case 'Gate in':
+      qty=cq; { const t=lkNav('Importacion',nav,'Gate in'); cu=t||0; manual=t===null; }
+      break;
+    case 'Visto Bueno':
+      qty=1;
+      { const vBL=lkTHC(op,nav,'Visto Bueno BL')||0;
+        const vCN=lkTHC(op,nav,'Visto Bueno Contenedor')||0;
+        cu=vBL*bq+vCN*cq; }
+      break;
+    case 'OTHC':
+      qty=cq; { const t=lkTHC('Exportacion',nav,'THC'); cu=t||0; manual=t===null; }
+      break;
+    case 'DTHC':
+      qty=cq; { const t=lkTHC('Importacion',nav,'THC'); cu=t||0; manual=t===null; }
+      break;
+    case 'Storage':
+      if(ct==='LCL'){ cu=stL; qty=1; }
+      else if(mod==='Aereo'){ cu=stA; qty=1; }
+      else { qty=cq; const t=lkSto(dep,ct,op); cu=t||0; manual=!t; }
+      break;
+    case 'Customs clearance':
+      qty=1;
+      cu = op==='Importacion' ? Math.max(cif*REGLAS.adP, REGLAS.adMI)+REGLAS.adFI : REGLAS.adFE;
+      break;
+    case 'Handling':
+      qty=1; sVenta=true; cu=0; vFija=70;
+      break;
+    case 'Transmision':
+      qty=1; sVenta=true; cu=0; vFija=30;
+      break;
+    case 'Handling aerolinea':
+      qty=1; cu=105;
+      break;
+    case 'Transfer':
+      qty=1; fijo=true; cu=-999; // calculado en 2da pasada
+      break;
+    case 'Ocean Freight':
+      qty=cq;
+      { const t=lkFM(ori,des,nav); cu=t!==null?t:(tOf||0); manual=t===null&&!tOf; }
+      break;
+    case 'Flete Aereo y Gastos':
+      qty=1;
+      { const fa=lkFA(ori,des);
+        cu=fa ? Math.max(pa*fa.tKg,fa.min) : (tFkg>0?Math.max(pa*tFkg,tFmin):0);
+        manual=!fa&&!tFkg; }
+      break;
+    case 'Doc Fee':
+      qty=bq;
+      { const t=lkNav(op,nav,'Doc Fee'); cu=t||tDf||0; manual=!t&&!tDf; }
+      break;
+    case 'Resguardo':
+      qty=1; cu=rsg||0;
+      break;
+    default:
+      cu=0; manual=true;
+  }
+  const cuUSD = mont==='PEN' ? cu/tc : cu;
+  const neto  = qty * cuUSD;
+  return {cu, qty, mon, cuUSD, neto, fijo, vFija, sVenta, manual};
+}
+
+// ══════════════════════════════════════════════
+// RECALC PRINCIPAL
+// ══════════════════════════════════════════════
+function recalc(){
+  const tc = gn('s_tc') || 3.75;
+  const mObj = gn('s_mobj')/100 || 0.15;
+  const mGer = gn('s_mger')/100 || 0.10;
+  const tU   = gn('t_tumbl') || 1000;
+  const s = {
+    op:   gv('s_op'),
+    mod:  gv('s_mod'),
+    inc:  gv('s_inc'),
+    var_: gv('s_var'),
+    nav:  gv('s_nav'),
+    ori:  gv('s_ori').trim(),
+    des:  gv('s_des').trim(),
+    ct:   gv('s_cnt_tipo'),
+    cq:   gn('s_cnt_qty') || 1,
+    bq:   gn('s_bl_qty')  || 1,
+    kg:   gn('s_peso_kg'),
+    pa:   getPA(),
+    cif:  gn('s_valor'),
+    dr:   gv('s_dis_r'),
+    de:   gv('s_dis_e'),
+    tip:  gv('s_tip_transp'),
+    mont: gv('s_mon_t'),
+    dep:  gv('s_dep'),
+    tc, mObj, mGer, tU,
+    igv:  gn('s_igv')/100,
+    stL:  gn('s_st_lcl'),
+    stA:  gn('s_st_ae'),
+    rsg:  gn('s_rsg'),
+    cred: gv('s_cred'),
+    dias: gn('s_dias') || 30,
+    tOf:  gn('t_of'),
+    tDf:  gn('t_df'),
+    tFkg: gn('t_fa_kg'),
+    tFmin:gn('t_fa_min'),
+  };
+
+  const cList = CI.filter(x=>x.m===s.mod&&x.i===s.inc&&x.v===s.var_).sort((a,b)=>a.o-b.o);
+  const alertEl  = document.getElementById('rt_alert');
+  const rtableEl = document.getElementById('rtable');
+
+  if(!cList.length){
+    alertEl.style.display='block';
+    rtableEl.style.display='none';
+    renderNeto([],s);
+    return;
+  }
+  alertEl.style.display='none';
+  rtableEl.style.display='';
+
+  // Pasada 1: todos excepto Transfer → acumular subtotal
+  const rows=[]; let sub=0;
+  for(const ci of cList){
+    if(ci.c==='Transfer') continue;
+    const comp = getCosto(ci.c, s);
+    sub += comp.neto;
+    rows.push({ci, comp});
+  }
+
+  // Transfer basado en subtotal
+  const trCI = cList.find(x=>x.c==='Transfer');
+  if(trCI){
+    const trCost = sub > tU ? REGLAS.trA : REGLAS.trB;
+    rows.push({ci:trCI, comp:{cu:trCost,qty:1,mon:'USD',cuUSD:trCost,neto:trCost,
+      fijo:true,vFija:trCost,sVenta:false,manual:false}});
+  }
+
+  // Pasada 2: precio venta y margen
+  const final = rows.map(({ci,comp},idx)=>{
+    let pv, mg, est;
+    if(comp.sVenta){
+      pv=comp.vFija||0; mg=1; est='PRECIO FIJO';
+    } else if(comp.fijo){
+      pv=comp.vFija!=null?comp.vFija:comp.neto; mg=0; est='PRECIO FIJO';
+    } else {
+      pv = mObj>=1 ? comp.neto+mObj : comp.neto/(1-mObj);
+      mg = pv>0?(pv-comp.neto)/pv:0;
+      est = mg>=mObj ? '✓ APROBADO' : mg>=mGer ? '⚠ GERENCIA' : '✗ BLOQUEAR';
+    }
+    return {n:idx+1, ci, comp, pv, mg, est};
+  });
+
+  // Costo financiero
+  if(s.cred==='Si'){
+    const rates={15:0.0075,30:0.015,60:0.03};
+    const rate = rates[s.dias]||0.015;
+    const base = final.reduce((a,r)=>a+r.comp.neto,0);
+    const fin  = base*rate;
+    if(fin>0) final.push({
+      n:final.length+1,
+      ci:{c:'Costo financiero',f:'Agente',t:'Financiamiento'},
+      comp:{cu:fin,qty:1,mon:'USD',cuUSD:fin,neto:fin,fijo:false,vFija:null,sVenta:false,manual:false},
+      pv:0, mg:0, est:'COSTO INTERNO', esF:true,
+    });
+  }
+
+  renderTable(final,s);
+  renderNeto(final,s);
+  document.getElementById('tc_badge').textContent = final.length;
+}
+
+// ══════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════
+const BADGE_CLS = {Origen:'bOr',Internacional:'bIn',Destino:'bDe',Local:'bLo',Aduanas:'bAd',Financiamiento:'bFi'};
+const badge = t => `<span class="bge ${BADGE_CLS[t]||'bLo'}">${t}</span>`;
+const estHtml = e =>
+  e==='✓ APROBADO' ? `<span class="sok">${e}</span>` :
+  e==='⚠ GERENCIA' ? `<span class="swrn">${e}</span>` :
+  e==='✗ BLOQUEAR' ? `<span class="sblk">${e}</span>` :
+  e==='PRECIO FIJO' ? `<span class="sfij">📌 FIJO</span>` :
+  `<span class="scst">COSTO INT.</span>`;
+
+function renderTable(rows,s){
+  const tb = document.getElementById('rt_body');
+  const tf = document.getElementById('rt_foot');
+  tb.innerHTML=''; tf.innerHTML='';
+
+  rows.forEach(r=>{
+    const{comp,ci,pv,mg,est,esF}=r;
+    const tr=document.createElement('tr');
+    if(esF) tr.className='srow';
+    else if(ci.f==='Shipper') tr.className='shrow';
+
+    const monStr = comp.mon==='PEN'
+      ? `S/${f2(comp.cu)}<br><small style="color:var(--mu)">≈$ ${f2(comp.cuUSD)}</small>`
+      : `$ ${f2(comp.cu)}`;
+    const warnStr = comp.manual ? `<br><small style="color:var(--warn)">⚠ sin tarifa</small>`:'';
+
+    tr.innerHTML=`
+      <td style="text-align:center;color:var(--mu);font-size:11px">${r.n}</td>
+      <td><b>${ci.c}</b>${warnStr}</td>
+      <td style="font-size:11px;color:var(--mu);text-align:center">${ci.f}</td>
+      <td>${badge(ci.t)}</td>
+      <td class="num">${comp.qty}</td>
+      <td style="text-align:center;font-size:11px">${comp.mon}</td>
+      <td class="num">${monStr}</td>
+      <td class="num"><b>$ ${f2(comp.neto)}</b></td>
+      <td class="num">${(comp.sVenta||comp.fijo||esF)?'—':pct(mg)}</td>
+      <td class="num"><b>$ ${f2(pv)}</b></td>
+      <td>${estHtml(est)}</td>`;
+    tb.appendChild(tr);
+  });
+
+  // Fila totales
+  const agR = rows.filter(r=>r.ci.f!=='Shipper'&&!r.esF);
+  const fR  = rows.find(r=>r.esF);
+  const tC  = agR.reduce((a,r)=>a+r.comp.neto,0) + (fR?fR.comp.neto:0);
+  const tV  = agR.reduce((a,r)=>a+r.pv,0);
+  const tM  = tV>0?(tV-tC)/tV:0;
+  const tE  = tM>=s.mObj?'✓ APROBADO':tM>=s.mGer?'⚠ GERENCIA':'✗ BLOQUEAR';
+  const tr  = document.createElement('tr');
+  tr.className='trow';
+  tr.innerHTML=`<td colspan="7" style="text-align:right">TOTALES</td>
+    <td class="num">$ ${f2(tC)}</td>
+    <td class="num">${pct(tM)}</td>
+    <td class="num">$ ${f2(tV)}</td>
+    <td>${estHtml(tE)}</td>`;
+  tf.appendChild(tr);
+
+  // Pills resumen
+  const pillsEl = document.getElementById('pills');
+  pillsEl.style.display='flex';
+  pillsEl.innerHTML=`
+    <div class="pill"><div class="pl">Neto Costo</div><div class="pv">$ ${f2(tC)}</div></div>
+    <div class="pill"><div class="pl">Precio Venta</div><div class="pv">$ ${f2(tV)}</div></div>
+    <div class="pill"><div class="pl">Margen</div><div class="pv">${pct(tM)}</div>
+      <div style="font-size:11px">${estHtml(tE)}</div></div>`;
+}
+
+function renderNeto(rows,s){
+  const CATS=['Origen','Internacional','Destino','Local','Aduanas','Financiamiento'];
+  const tb=document.getElementById('nt_body');
+  tb.innerHTML='';
+  let gC=0, gV=0;
+  CATS.forEach(cat=>{
+    const cr=rows.filter(r=>r.ci.t===cat&&r.ci.f!=='Shipper');
+    if(!cr.length) return;
+    const c=cr.reduce((a,r)=>a+r.comp.neto,0);
+    const v=cr.reduce((a,r)=>a+r.pv,0);
+    const m=v>0?(v-c)/v:0;
+    gC+=c; gV+=v;
+    const tr=document.createElement('tr');
+    tr.className=cat==='Financiamiento'?'fr2':'cr';
+    tr.innerHTML=`<td>${badge(cat)} ${cat}</td>
+      <td class="r">$ ${f2(c)}</td>
+      <td class="r">$ ${f2(v)}</td>
+      <td class="r">${cat==='Financiamiento'?'SOLO COSTO':pct(m)}</td>`;
+    tb.appendChild(tr);
+  });
+  const gM=gV>0?(gV-gC)/gV:0;
+  const tr=document.createElement('tr');
+  tr.className='tr2';
+  tr.innerHTML=`<td>⭐ TOTAL NETO</td>
+    <td class="r">$ ${f2(gC)}</td>
+    <td class="r">$ ${f2(gV)}</td>
+    <td class="r">${pct(gM)}</td>`;
+  tb.appendChild(tr);
+}
+
+function exportCSV(){
+  const h=['#','Concepto','Factura','Tipo','Qty','Mon','Costo U','Neto Costo','Mg%','Precio Venta','Estado'];
+  const rows=[h.join(',')];
+  document.querySelectorAll('#rt_body tr').forEach(tr=>{
+    const cells=Array.from(tr.querySelectorAll('td')).map(td=>`"${td.textContent.replace(/"/g,'""').trim()}"`);
+    rows.push(cells.join(','));
+  });
+  const blob=new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='CAP_Cotizacion.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ══════════════════════════════════════════════
+// IA: ANÁLISIS DE IMAGEN CON GPT-4o VISION
+// ══════════════════════════════════════════════
+let _iaB64 = null; // imagen en base64
+
+function onFileSelect(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _iaB64 = e.target.result; // data:image/...;base64,...
+    const img = document.getElementById('ia_img');
+    const preview = document.getElementById('ia_preview');
+    if(file.type.startsWith('image/')){
+      img.src = _iaB64;
+      preview.style.display = 'block';
+    } else {
+      img.src = '';
+      preview.style.display = 'none';
+    }
+    document.getElementById('ia_btn').style.display = 'block';
+    iaStatus('Archivo listo. Presiona "Analizar y completar formulario".','#e3f2fd','#0d47a1');
+  };
+  reader.readAsDataURL(file);
+}
+
+function iaStatus(msg, bg, color){
+  const el = document.getElementById('ia_status');
+  el.style.display = 'block';
+  el.style.background = bg||'#f5f5f5';
+  el.style.color = color||'#333';
+  el.innerHTML = msg;
+}
+
+async function analizarImagen(){
+  const key = document.getElementById('ia_key').value.trim();
+  if(!key){ iaStatus('⚠️ Ingresa tu API Key de OpenAI primero.','#fff3e0','#bf360c'); return; }
+  if(!_iaB64){ iaStatus('⚠️ Selecciona una imagen primero.','#fff3e0','#bf360c'); return; }
+
+  const btn = document.getElementById('ia_btn');
+  btn.textContent = '⏳ Analizando...';
+  btn.disabled = true;
+  iaStatus('Enviando imagen a GPT-4o...','#e3f2fd','#0d47a1');
+
+  const NAVIERAS = ['CMA - CGM','COSCO / OOCL','EVERGREEN','HAPAG LLOYD','HYUNDAI',
+    'MAERSK','MSC DEL PERU','ONE','PIL','WAN HAI','YANG MING'];
+
+  const prompt = `Analiza este documento de logística/transporte (puede ser un correo, booking, B/L, proforma, etc.) y extrae los siguientes campos. Devuelve SOLO un JSON válido sin explicaciones adicionales:
+
+{
+  "operacion": "Importacion" o "Exportacion",
+  "modalidad": "Maritimo" o "Aereo",
+  "incoterm": uno de: EXW, FCA, FOB, DDU, DAP,
+  "naviera": uno de: ${NAVIERAS.join(', ')},
+  "origen": ciudad o puerto de origen,
+  "destino": ciudad o puerto de destino,
+  "tipo_contenedor": uno de: 20ST, 40ST, 40HC, LCL,
+  "cantidad_cnt": número entero (cantidad de contenedores),
+  "cantidad_bl": número entero (número de BL/AWB),
+  "peso_kg": número (peso en kg si se menciona),
+  "valor_cif_usd": número (valor CIF en USD si se menciona)
+}
+
+Si un campo no está claro en el documento, usa null. Solo devuelve el JSON.`;
+
+  // Preparar imagen: si es PDF, solo mandamos texto con aviso
+  const isImage = _iaB64.startsWith('data:image');
+  let messages;
+  if(isImage){
+    const b64data = _iaB64.split(',')[1];
+    const mimeType = _iaB64.split(';')[0].replace('data:','');
+    messages = [{
+      role:'user',
+      content:[
+        {type:'image_url', image_url:{url:`data:${mimeType};base64,${b64data}`,detail:'high'}},
+        {type:'text', text: prompt}
+      ]
+    }];
+  } else {
+    // Para PDF: aviso al usuario
+    iaStatus('⚠️ Para PDFs, captura una screenshot y sube la imagen.','#fff3e0','#bf360c');
+    btn.textContent='🔍 Analizar y completar formulario'; btn.disabled=false;
+    return;
+  }
+
+  try {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages,
+        max_tokens: 500,
+        temperature: 0,
+      })
+    });
+    if(!resp.ok){
+      const err = await resp.json();
+      throw new Error(err.error?.message || resp.statusText);
+    }
+    const data = await resp.json();
+    const text = data.choices[0].message.content.trim();
+    // Extraer JSON aunque venga con markdown
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if(!jsonMatch) throw new Error('No se encontró JSON en la respuesta: '+text);
+    const ext = JSON.parse(jsonMatch[0]);
+    aplicarExtraccion(ext);
+  } catch(e){
+    iaStatus('❌ Error: '+e.message,'#fce4ec','#880e4f');
+  } finally {
+    btn.textContent='🔍 Analizar y completar formulario';
+    btn.disabled=false;
+  }
+}
+
+function aplicarExtraccion(d){
+  let log = '<b>✅ Datos extraídos:</b><br>';
+  let cnt=0;
+
+  function set(id, val, label){
+    if(val===null||val===undefined||val==='') return;
+    const el=document.getElementById(id);
+    if(!el) return;
+    // Para selects: buscar opción que coincida (case-insensitive)
+    if(el.tagName==='SELECT'){
+      const opts=Array.from(el.options);
+      const match=opts.find(o=>o.value.toLowerCase()===String(val).toLowerCase()
+                             || o.text.toLowerCase()===String(val).toLowerCase());
+      if(match){ el.value=match.value; log+=`• ${label}: <b>${match.text}</b><br>`; cnt++; }
+    } else {
+      el.value=val; log+=`• ${label}: <b>${val}</b><br>`; cnt++;
+    }
+  }
+
+  if(d.operacion)      set('s_op',       d.operacion,        'Operación');
+  if(d.modalidad)      { set('s_mod',    d.modalidad,        'Modalidad');
+                         onModChange(); } // refresca incoterms
+  if(d.incoterm)       { set('s_inc',    d.incoterm,         'Incoterm');
+                         onIncChange(); }
+  if(d.naviera)        set('s_nav',      d.naviera,          'Naviera');
+  if(d.origen)         set('s_ori',      d.origen,           'Origen');
+  if(d.destino)        set('s_des',      d.destino,          'Destino');
+  if(d.tipo_contenedor)set('s_cnt_tipo', d.tipo_contenedor,  'Tipo CNT');
+  if(d.cantidad_cnt)   set('s_cnt_qty',  d.cantidad_cnt,     'Cant. CNT');
+  if(d.cantidad_bl)    set('s_bl_qty',   d.cantidad_bl,      '# BL');
+  if(d.peso_kg)        set('s_peso_kg',  d.peso_kg,          'Peso KG');
+  if(d.valor_cif_usd)  set('s_valor',    d.valor_cif_usd,    'Valor CIF');
+
+  recalc();
+  if(cnt===0){
+    iaStatus('⚠️ No se pudo extraer información del documento. Intenta con una imagen más clara.','#fff3e0','#bf360c');
+  } else {
+    log += `<br><i style="color:var(--mu)">${cnt} campo(s) completados automáticamente.</i>`;
+    iaStatus(log,'#e8f5e9','#1b5e20');
+    // En móvil, ir a la pestaña de resultado
+    if(window.innerWidth<860) setTimeout(()=>showTab('r'),600);
+  }
+}
+
+// Drag & drop en el área de drop
+document.addEventListener('DOMContentLoaded',()=>{
+  const drop=document.getElementById('ia_drop');
+  if(!drop) return;
+  drop.addEventListener('dragover',e=>{e.preventDefault();drop.style.background='#bbdefb';});
+  drop.addEventListener('dragleave',()=>{drop.style.background='#f0f7ff';});
+  drop.addEventListener('drop',e=>{
+    e.preventDefault();drop.style.background='#f0f7ff';
+    const file=e.dataTransfer.files[0];
+    if(file){ const dt=new DataTransfer();dt.items.add(file);
+      document.getElementById('ia_file').files=dt.files;
+      onFileSelect({target:document.getElementById('ia_file')}); }
+  });
+});
+
+// ══════════════════════════════════════════════
+// INIT — robusto
+// ══════════════════════════════════════════════
+function initApp(){
+  if(window._rdy) return;
+  window._rdy = true;
+  buildWt();
+  onModChange();
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
+window.addEventListener('load', initApp);
+setTimeout(initApp, 250);
+</script>
+</body>
+</html>
