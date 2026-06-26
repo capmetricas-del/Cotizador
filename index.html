@@ -1185,8 +1185,9 @@ async function analizarImagen(){
 - "20ST" = contenedor de 20 pies estándar (20', 20ft, TEU)
 - "40ST" = contenedor de 40 pies estándar (40', 40ft)
 - "40HC" = contenedor de 40 pies High Cube (40HC, 40HQ, 40 High)
-- "LCL" = carga consolidada / groupage / menos de un contenedor completo
+- "LCL" = carga consolidada / groupage / menos de un contenedor / sin mención de contenedor
 - Si el envío es AÉREO → siempre "LCL"
+- Si NO se menciona ningún tipo de contenedor específico → "LCL" (nunca dejes null aquí)
 
 ═══ DIRECCIÓN LOCAL ═══
 - Busca cualquier dirección física en Lima/Callao: "Av.", "Jr.", "Calle", "Urb.", almacén, planta, domicilio.
@@ -1327,9 +1328,12 @@ function aplicarExtraccion(d){
 
   // ── 4. TIPO DE CARGA + tipo tarifa + moneda ──
   const mod = gv('s_mod');
-  const tipoCnt = d.tipo_contenedor;
 
-  if(tipoCnt){ setVal('s_cnt_tipo', tipoCnt, 'Tipo de carga'); }
+  // Regla: Aéreo → siempre LCL; sin contenedor detectado → LCL
+  const tipoCntRaw = d.tipo_contenedor;
+  const tipoCnt = (mod==='Aereo' || !tipoCntRaw) ? 'LCL' : tipoCntRaw;
+
+  setVal('s_cnt_tipo', tipoCnt, 'Tipo de carga');
 
   // Aéreo o LCL → tarifa por Peso KG
   const esPesoKG = (mod==='Aereo') || (tipoCnt==='LCL');
@@ -1341,11 +1345,6 @@ function aplicarExtraccion(d){
     const moneda = mod==='Aereo' ? 'USD' : 'PEN';
     setValSilent('s_mon_t', moneda);
     log+=`• Moneda transporte: <b>${moneda}</b><br>`; cnt++;
-    // Para aéreo: tipo contenedor = LCL
-    if(mod==='Aereo'){
-      setValSilent('s_cnt_tipo','LCL');
-      log+=`• Tipo carga Aéreo → <b>LCL</b><br>`; cnt++;
-    }
     // Cantidad CNT no aplica para LCL/Aéreo
   } else {
     // Maritimo FCL → tarifa por contenedor
