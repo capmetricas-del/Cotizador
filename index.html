@@ -159,8 +159,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="ch ch2" onclick="tog(this)">📷 Importar desde foto o correo (IA) <span class="chv">▾</span></div>
       <div class="coll"><div class="cb">
         <div class="fg">
-          <label>API Key de OpenAI (no se guarda)</label>
-          <input id="ia_key" type="password" placeholder="sk-..." style="font-size:13px;height:40px">
+          <label>API Key de OpenAI</label>
+          <input id="ia_key" type="password" placeholder="sk-proj-..." style="font-size:13px;height:44px">
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            <input type="checkbox" id="ia_save" style="width:18px;height:18px;cursor:pointer" onchange="toggleSaveKey()">
+            <label for="ia_save" style="font-size:12px;color:var(--mu);text-transform:none;letter-spacing:0;font-weight:500;cursor:pointer">
+              Recordar clave en este navegador
+            </label>
+            <button onclick="clearKey()" title="Borrar clave guardada"
+              style="margin-left:auto;font-size:11px;padding:3px 10px;background:none;
+                     border:1px solid var(--bd);border-radius:6px;cursor:pointer;color:var(--mu)">
+              🗑 Borrar
+            </button>
+          </div>
+          <div id="ia_key_msg" style="font-size:11px;color:var(--ok);display:none;margin-top:4px">
+            ✓ Clave guardada en este navegador
+          </div>
         </div>
         <div id="ia_drop" onclick="document.getElementById('ia_file').click()"
           style="border:2px dashed var(--p2);border-radius:10px;padding:20px;text-align:center;
@@ -1100,6 +1114,37 @@ function onFileSelect(ev){
   reader.readAsDataURL(file);
 }
 
+// ── API KEY: guardar/cargar en localStorage ──
+function toggleSaveKey(){
+  const save = document.getElementById('ia_save').checked;
+  const key  = document.getElementById('ia_key').value.trim();
+  if(save && key){ localStorage.setItem('cap_oai_key', key); showKeyMsg(true); }
+  else { localStorage.removeItem('cap_oai_key'); showKeyMsg(false); }
+}
+function saveKey(){
+  if(document.getElementById('ia_save').checked){
+    const key = document.getElementById('ia_key').value.trim();
+    if(key) localStorage.setItem('cap_oai_key', key);
+  }
+}
+function clearKey(){
+  localStorage.removeItem('cap_oai_key');
+  document.getElementById('ia_key').value='';
+  document.getElementById('ia_save').checked=false;
+  showKeyMsg(false);
+}
+function showKeyMsg(show){
+  document.getElementById('ia_key_msg').style.display = show?'block':'none';
+}
+function loadSavedKey(){
+  const saved = localStorage.getItem('cap_oai_key');
+  if(saved){
+    document.getElementById('ia_key').value = saved;
+    document.getElementById('ia_save').checked = true;
+    showKeyMsg(true);
+  }
+}
+
 function iaStatus(msg, bg, color){
   const el = document.getElementById('ia_status');
   el.style.display = 'block';
@@ -1121,23 +1166,40 @@ async function analizarImagen(){
   const NAVIERAS = ['CMA - CGM','COSCO / OOCL','EVERGREEN','HAPAG LLOYD','HYUNDAI',
     'MAERSK','MSC DEL PERU','ONE','PIL','WAN HAI','YANG MING'];
 
-  const prompt = `Analiza este documento de logística/transporte (puede ser un correo, booking, B/L, proforma, etc.) y extrae los siguientes campos. Devuelve SOLO un JSON válido sin explicaciones adicionales:
+  const DISTRITOS = Object.keys(ZONAS).sort().join(', ');
+
+  const prompt = `Eres un asistente experto en logística de comercio exterior peruano. Analiza este documento (puede ser correo, booking, B/L, proforma, instrucción de embarque, etc.) y extrae los campos indicados.
+
+REGLAS IMPORTANTES:
+- "distrito_recojo": distrito de Lima/Callao donde se recoge la mercancía (almacén del exportador o punto de recojo). Busca direcciones como "Av. ..., San Isidro", "Jr. ..., Callao", etc. Debe ser uno de los distritos de Lima/Callao.
+- "distrito_entrega": distrito de Lima/Callao donde se entrega la mercancía al cliente o consignatario.
+- "direccion_recojo": dirección completa de recojo (calle, número, distrito) si aparece.
+- "direccion_entrega": dirección completa de entrega (calle, número, distrito) si aparece.
+- Para incoterms EXW/FCA: el recojo suele ser en el almacén del exportador → llena distrito_recojo.
+- Para incoterms DDU/DAP: la entrega es en el domicilio del importador → llena distrito_entrega.
+- "naviera": debe ser exactamente uno de los valores permitidos, o null si no coincide.
+
+Distritos válidos de Lima/Callao: ${DISTRITOS}
+
+Devuelve SOLO un JSON válido (sin explicaciones, sin markdown):
 
 {
   "operacion": "Importacion" o "Exportacion",
   "modalidad": "Maritimo" o "Aereo",
-  "incoterm": uno de: EXW, FCA, FOB, DDU, DAP,
-  "naviera": uno de: ${NAVIERAS.join(', ')},
-  "origen": ciudad o puerto de origen,
-  "destino": ciudad o puerto de destino,
-  "tipo_contenedor": uno de: 20ST, 40ST, 40HC, LCL,
-  "cantidad_cnt": número entero (cantidad de contenedores),
-  "cantidad_bl": número entero (número de BL/AWB),
-  "peso_kg": número (peso en kg si se menciona),
-  "valor_cif_usd": número (valor CIF en USD si se menciona)
-}
-
-Si un campo no está claro en el documento, usa null. Solo devuelve el JSON.`;
+  "incoterm": "EXW" | "FCA" | "FOB" | "DDU" | "DAP" | null,
+  "naviera": uno de los permitidos o null,
+  "origen": ciudad o puerto de origen internacional,
+  "destino": ciudad o puerto de destino internacional,
+  "tipo_contenedor": "20ST" | "40ST" | "40HC" | "LCL" | null,
+  "cantidad_cnt": número entero o null,
+  "cantidad_bl": número entero o null,
+  "peso_kg": número o null,
+  "valor_cif_usd": número o null,
+  "distrito_recojo": uno de los distritos válidos o null,
+  "distrito_entrega": uno de los distritos válidos o null,
+  "direccion_recojo": "texto completo de la dirección de recojo" o null,
+  "direccion_entrega": "texto completo de la dirección de entrega" o null
+}`;
 
   // Preparar imagen: si es PDF, solo mandamos texto con aviso
   const isImage = _iaB64.startsWith('data:image');
@@ -1191,45 +1253,103 @@ Si un campo no está claro en el documento, usa null. Solo devuelve el JSON.`;
 
 function aplicarExtraccion(d){
   let log = '<b>✅ Datos extraídos:</b><br>';
-  let cnt=0;
+  let cnt = 0;
 
+  // Setea un campo por id (select o input)
   function set(id, val, label){
     if(val===null||val===undefined||val==='') return;
-    const el=document.getElementById(id);
+    const el = document.getElementById(id);
     if(!el) return;
-    // Para selects: buscar opción que coincida (case-insensitive)
     if(el.tagName==='SELECT'){
-      const opts=Array.from(el.options);
-      const match=opts.find(o=>o.value.toLowerCase()===String(val).toLowerCase()
-                             || o.text.toLowerCase()===String(val).toLowerCase());
-      if(match){ el.value=match.value; log+=`• ${label}: <b>${match.text}</b><br>`; cnt++; }
+      const opts = Array.from(el.options);
+      // Coincidencia exacta primero, luego parcial
+      let match = opts.find(o=>o.value.toLowerCase()===String(val).toLowerCase());
+      if(!match) match = opts.find(o=>o.value.toLowerCase().includes(String(val).toLowerCase())
+                                   || String(val).toLowerCase().includes(o.value.toLowerCase()));
+      if(match){ el.value=match.value; log+=`• ${label}: <b>${match.text||match.value}</b><br>`; cnt++; }
+      else { log+=`• ${label}: <span style="color:var(--warn)">⚠ "${val}" no encontrado en lista</span><br>`; }
     } else {
-      el.value=val; log+=`• ${label}: <b>${val}</b><br>`; cnt++;
+      el.value = val;
+      log += `• ${label}: <b>${val}</b><br>`;
+      cnt++;
     }
   }
 
-  if(d.operacion)      set('s_op',       d.operacion,        'Operación');
-  if(d.modalidad)      { set('s_mod',    d.modalidad,        'Modalidad');
-                         onModChange(); } // refresca incoterms
-  if(d.incoterm)       { set('s_inc',    d.incoterm,         'Incoterm');
-                         onIncChange(); }
-  if(d.naviera)        set('s_nav',      d.naviera,          'Naviera');
-  if(d.origen)         set('s_ori',      d.origen,           'Origen');
-  if(d.destino)        set('s_des',      d.destino,          'Destino');
-  if(d.tipo_contenedor)set('s_cnt_tipo', d.tipo_contenedor,  'Tipo CNT');
-  if(d.cantidad_cnt)   set('s_cnt_qty',  d.cantidad_cnt,     'Cant. CNT');
-  if(d.cantidad_bl)    set('s_bl_qty',   d.cantidad_bl,      '# BL');
-  if(d.peso_kg)        set('s_peso_kg',  d.peso_kg,          'Peso KG');
-  if(d.valor_cif_usd)  set('s_valor',    d.valor_cif_usd,    'Valor CIF');
+  // Setea distrito en un select buscando el texto del distrito
+  function setDistrito(id, distrito, label){
+    if(!distrito) return;
+    const el = document.getElementById(id);
+    if(!el) return;
+    const opts = Array.from(el.options);
+    const dist = String(distrito).toUpperCase().trim();
+    // Coincidencia exacta
+    let match = opts.find(o=>o.value.toUpperCase()===dist);
+    // Coincidencia parcial si no hay exacta
+    if(!match) match = opts.find(o=>dist.includes(o.value.toUpperCase()) || o.value.toUpperCase().includes(dist));
+    if(match){
+      el.value = match.value;
+      log += `• ${label}: <b>${match.value}</b><br>`;
+      cnt++;
+    } else {
+      log += `• ${label}: <span style="color:var(--warn)">⚠ Distrito "${distrito}" no está en la lista — selecciónalo manualmente</span><br>`;
+    }
+  }
+
+  // 1. Modalidad primero (afecta opciones de incoterm)
+  if(d.modalidad){
+    set('s_mod', d.modalidad, 'Modalidad');
+    onModChange();
+  }
+  // 2. Incoterm (afecta variante)
+  if(d.incoterm){
+    set('s_inc', d.incoterm, 'Incoterm');
+    onIncChange();
+  }
+  // 3. Resto de campos principales
+  if(d.operacion)       set('s_op',       d.operacion,       'Operación');
+  if(d.naviera)         set('s_nav',      d.naviera,         'Naviera');
+  if(d.origen)          set('s_ori',      d.origen,          'Origen internacional');
+  if(d.destino)         set('s_des',      d.destino,         'Destino internacional');
+  if(d.tipo_contenedor) set('s_cnt_tipo', d.tipo_contenedor, 'Tipo CNT');
+  if(d.cantidad_cnt)    set('s_cnt_qty',  d.cantidad_cnt,    'Cant. CNT');
+  if(d.cantidad_bl)     set('s_bl_qty',   d.cantidad_bl,     '# BL/AWB');
+  if(d.peso_kg)         set('s_peso_kg',  d.peso_kg,         'Peso KG');
+  if(d.valor_cif_usd)   set('s_valor',    d.valor_cif_usd,   'Valor CIF USD');
+
+  // 4. Distritos de recojo/entrega según incoterm
+  const inc = gv('s_inc');
+  const op  = gv('s_op');
+
+  // Lógica según incoterm:
+  // EXW, FCA, FOB (Exportacion) → recojo en almacén exportador → distrito_recojo
+  // DDU, DAP (Importacion) → entrega al consignatario → distrito_entrega
+  // Si vienen ambos del documento, llenamos ambos
+  if(d.distrito_recojo)  setDistrito('s_dis_r', d.distrito_recojo,  '🚚 Distrito de recojo');
+  if(d.distrito_entrega) setDistrito('s_dis_e', d.distrito_entrega, '📦 Distrito de entrega');
+
+  // Si solo vino un distrito y el incoterm indica claramente cuál es
+  if(!d.distrito_recojo && !d.distrito_entrega){
+    // Intentar inferir: si hay una dirección de recojo detectada
+    const incExpo = ['EXW','FCA','FOB'].includes(inc);
+    const incImpo = ['DDU','DAP'].includes(inc);
+    if(d.direccion_recojo && incExpo)  log += `• 📍 Dirección recojo detectada: <b>${d.direccion_recojo}</b> — selecciona el distrito manualmente<br>`;
+    if(d.direccion_entrega && incImpo) log += `• 📍 Dirección entrega detectada: <b>${d.direccion_entrega}</b> — selecciona el distrito manualmente<br>`;
+  }
+
+  // Mostrar direcciones completas como referencia aunque el distrito no esté en la lista
+  if(d.direccion_recojo && !d.distrito_recojo)
+    log += `• 📍 Dir. recojo completa: <i>${d.direccion_recojo}</i><br>`;
+  if(d.direccion_entrega && !d.distrito_entrega)
+    log += `• 📍 Dir. entrega completa: <i>${d.direccion_entrega}</i><br>`;
 
   recalc();
+
   if(cnt===0){
-    iaStatus('⚠️ No se pudo extraer información del documento. Intenta con una imagen más clara.','#fff3e0','#bf360c');
+    iaStatus('⚠️ No se pudo extraer información. Intenta con una imagen más nítida o de mayor resolución.','#fff3e0','#bf360c');
   } else {
-    log += `<br><i style="color:var(--mu)">${cnt} campo(s) completados automáticamente.</i>`;
-    iaStatus(log,'#e8f5e9','#1b5e20');
-    // En móvil, ir a la pestaña de resultado
-    if(window.innerWidth<860) setTimeout(()=>showTab('r'),600);
+    log += `<br><span style="color:var(--mu);font-style:italic">${cnt} campo(s) completados automáticamente.</span>`;
+    iaStatus(log, '#e8f5e9', '#1b5e20');
+    if(window.innerWidth<860) setTimeout(()=>showTab('r'), 700);
   }
 }
 
@@ -1256,6 +1376,7 @@ function initApp(){
   window._rdy = true;
   buildWt();
   onModChange();
+  loadSavedKey();
 }
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded', initApp);
