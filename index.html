@@ -196,17 +196,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <div>
     <h1>CAP Logistic · Cotizador</h1>
-    <div class="sub">v2.5 · offline</div>
+    <div class="sub">v2.4 · offline</div>
   </div>
   <div class="hdr-acts">
     <div id="login-user-bar">
       <span id="login-user-name"></span>
       <button onclick="doLogout()">Salir</button>
     </div>
+    <button id="sheet_btn" class="ibtn" onclick="loadTarifasFromDrive(false)" title="Sincronizar tarifas desde Google Drive">🔄 Drive</button>
     <button class="ibtn" onclick="exportCSV()">⬇ CSV</button>
     <button class="ibtn" onclick="window.print()">🖨</button>
   </div>
 </div>
+<div id="sheet_status" style="display:none;text-align:center;padding:5px 14px;font-size:12px;font-weight:600;background:#f8f9fa;border-bottom:1px solid var(--bd)"></div>
 
 <div class="tabs">
   <div class="tab active" id="tab_f" onclick="showTab('f')">📋 Formulario</div>
@@ -222,6 +224,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="card" id="card_ia">
       <div class="ch ch2" onclick="tog(this)">📷 Importar desde foto o correo (IA) <span class="chv">▾</span></div>
       <div class="coll"><div class="cb">
+        <!-- API Key Input -->
+        <div style="margin-bottom:10px;padding:10px;background:#f8f9fa;border-radius:8px;border:1px solid var(--bd)">
+          <div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">🔑 OpenAI API Key</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="ia_key" type="password" placeholder="sk-..." autocomplete="off"
+              style="flex:1;padding:7px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:monospace;outline:none"
+              onfocus="this.style.borderColor='var(--p2)'" onblur="this.style.borderColor='var(--bd)'">
+            <button onclick="saveKey()" title="Guardar"
+              style="padding:7px 10px;background:var(--ok);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">💾</button>
+            <button onclick="clearKey()" title="Borrar"
+              style="padding:7px 10px;background:#e0e0e0;color:#555;border:none;border-radius:7px;cursor:pointer;font-size:12px">✕</button>
+          </div>
+          <div id="ia_key_msg" style="font-size:11px;margin-top:4px;min-height:14px"></div>
+        </div>
+
         <div id="ia_drop" onclick="document.getElementById('ia_file').click()"
           style="border:2px dashed var(--p2);border-radius:10px;padding:20px;text-align:center;
                  cursor:pointer;background:#f0f7ff;margin-bottom:10px;user-select:none">
@@ -1170,8 +1187,8 @@ function iaStatus(msg, bg, color){
 }
 
 async function analizarImagen(){
-  const key = OPENAI_API_KEY;
-  if(!key || key.includes('TU_API_KEY')){ iaStatus('⚠️ API Key no configurada. Contacta al administrador.','#fff3e0','#bf360c'); return; }
+  const key = (document.getElementById('ia_key')||{}).value || localStorage.getItem('cap_ia_key') || '';
+  if(!key.startsWith('sk-')){ iaStatus('⚠️ Ingresa tu API Key de OpenAI (sk-...) y guárdala.','#fff3e0','#bf360c'); return; }
   if(!_iaB64){ iaStatus('⚠️ Selecciona una imagen primero.','#fff3e0','#bf360c'); return; }
 
   const btn = document.getElementById('ia_btn');
@@ -1494,9 +1511,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 const AUTH_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw8FPbC6pBVcoEziP6WqzsXbNbvS39KE_RDJHfHvDsm1ezqbCgpXT1T7UrdhHpmZzy3/exec';
 // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-// ▼▼▼ PEGA AQUÍ TU API KEY DE OPENAI ▼▼▼
-const OPENAI_API_KEY = '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';
-// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+// ── Google Sheets: base de costos ──────────────
+const SHEETS_ID  = '1g3ttZiu0njO_nZVDetw1ywsAY1EtsYc8E7CefRAt7Hc';
+const SHEETS_GID = '1648325272';
+// ───────────────────────────────────────────────
 
 const SESSION_KEY = 'cap_auth_session';
 
@@ -1571,6 +1589,133 @@ function doLogout(){
 }
 
 // ══════════════════════════════════════════════
+// KEY MANAGEMENT
+// ══════════════════════════════════════════════
+function loadSavedKey(){
+  const k = localStorage.getItem('cap_ia_key')||'';
+  const el = document.getElementById('ia_key');
+  if(el && k) el.value = k;
+}
+function saveKey(){
+  const k = (document.getElementById('ia_key')||{}).value||'';
+  if(!k.startsWith('sk-')){ showKeyMsg('⚠️ Key inválida (debe empezar con sk-)','#e53935'); return; }
+  localStorage.setItem('cap_ia_key', k);
+  showKeyMsg('✓ Key guardada en este dispositivo','#27ae60');
+}
+function clearKey(){
+  localStorage.removeItem('cap_ia_key');
+  const el = document.getElementById('ia_key');
+  if(el) el.value = '';
+  showKeyMsg('Key eliminada','#e67e22');
+}
+function showKeyMsg(msg, color){
+  const el = document.getElementById('ia_key_msg');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.color = color||'#666';
+  setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; }, 3500);
+}
+
+// GOOGLE SHEETS — Carga de tarifas desde Drive
+// ══════════════════════════════════════════════
+async function loadTarifasFromDrive(silent){
+  const url = `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/export?format=csv&gid=${SHEETS_GID}`;
+  const btn = document.getElementById('sheet_btn');
+  if(btn){ btn.textContent='⏳ Cargando...'; btn.disabled=true; }
+  try{
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error(`HTTP ${resp.status} — ¿Hoja pública?`);
+    const text = await resp.text();
+    if(!text||text.length<10) throw new Error('Respuesta vacía — verifica acceso público');
+    parseTarifasCSV(text);
+    showSheetStatus('✓ Tarifas actualizadas desde Drive','#27ae60');
+    localStorage.setItem('cap_tarifas_cache', text);
+    localStorage.setItem('cap_tarifas_ts', Date.now());
+  }catch(e){
+    // Intentar caché
+    const cached = localStorage.getItem('cap_tarifas_cache');
+    if(cached && !silent){
+      parseTarifasCSV(cached);
+      const ts = localStorage.getItem('cap_tarifas_ts');
+      const age = ts ? Math.round((Date.now()-+ts)/3600000)+'h' : '?';
+      showSheetStatus(`⚠️ Sin conexión — usando caché (${age} atrás)`,'#e67e22');
+    } else if(!silent){
+      showSheetStatus('⚠️ '+e.message+' — usando tarifas locales','#e67e22');
+    }
+  }finally{
+    if(btn){ btn.textContent='🔄 Actualizar desde Drive'; btn.disabled=false; }
+  }
+}
+
+function parseTarifasCSV(csv){
+  // Parsea el CSV del Google Sheet de costos.
+  // Estructura esperada: cada fila con TIPO,CAMPO1,CAMPO2,...,VALOR
+  // Secciones: TCNT, TKG, THC, STORAGE, FLETE_MAR, FLETE_AER
+  const rows = csv.split('\n').map(r=>{
+    const cols=[]; let cur='', inQ=false;
+    for(let ch of r){
+      if(ch==='"') inQ=!inQ;
+      else if(ch===','&&!inQ){ cols.push(cur.trim()); cur=''; }
+      else cur+=ch;
+    }
+    cols.push(cur.trim()); return cols;
+  }).filter(r=>r.length>1&&r[0]);
+
+  let section='';
+  const newTHC=[...THC_VB]; // start with defaults, override matched rows
+  let newTCNT={}, newTKG=[], newSTORAGE={...STORAGE};
+  let inTKG=false, tkg_headers=[];
+
+  for(const row of rows){
+    const tag = (row[0]||'').toUpperCase().trim();
+    // Section headers
+    if(['THC','VB','GATE OUT','DOC FEE'].some(k=>tag.includes(k))&&row.length<=3){section='THC';continue;}
+    if(tag.includes('TCNT')||tag.includes('CONTENEDOR')){section='TCNT';continue;}
+    if(tag.includes('TKG')||tag.includes('KG')||tag.includes('PESO')){
+      section='TKG'; inTKG=true; tkg_headers=row.slice(1); continue;}
+    if(tag.includes('STORAGE')||tag.includes('APM')||tag.includes('DPW')||tag.includes('DT')){section='STORAGE';}
+
+    // Parse by section
+    if(section==='THC'&&row.length>=4){
+      const [,ruta,nav,cargo,...rest]=row;
+      const val=parseFloat(rest[0])||0;
+      const idx=newTHC.findIndex(x=>x.r===ruta&&x.n===nav&&x.c===cargo);
+      if(idx>=0) newTHC[idx]={...newTHC[idx],t:val};
+    }
+    if(section==='TCNT'&&row.length>=7){
+      const cnt=row[0]; 
+      if(!newTCNT[cnt]) newTCNT[cnt]={};
+      ['ZONA 1','ZONA 2','ZONA 3','ZONA 4','ZONA 4 II'].forEach((z,i)=>{
+        if(row[i+1]) newTCNT[cnt][z]=parseFloat(row[i+1])||newTCNT[cnt][z]||0;
+      });
+    }
+    if(section==='TKG'&&row.length>=3&&!isNaN(parseFloat(row[0]))){
+      const obj={a:parseFloat(row[0]),b:parseFloat(row[1])||99999};
+      tkg_headers.forEach((h,i)=>{ if(row[i+2]) obj[h]=parseFloat(row[i+2])||0; });
+      newTKG.push(obj);
+    }
+    if(section==='STORAGE'&&row.length>=4){
+      const [dep,cnt,op,val]=row;
+      if(newSTORAGE[dep]&&newSTORAGE[dep][cnt]) newSTORAGE[dep][cnt][op]=parseFloat(val)||0;
+    }
+  }
+
+  // Apply updates
+  THC_VB.splice(0,THC_VB.length,...newTHC);
+  if(Object.keys(newTCNT).length>0) Object.assign(TCNT,newTCNT);
+  if(newTKG.length>0){ TKG.splice(0,TKG.length,...newTKG); }
+  Object.assign(STORAGE,newSTORAGE);
+  recalc();
+}
+
+function showSheetStatus(msg, color){
+  const el=document.getElementById('sheet_status');
+  if(!el) return;
+  el.textContent=msg; el.style.color=color||'#666';
+  el.style.display='block';
+  setTimeout(()=>el.style.display='none', 5000);
+}
+
 // INIT — robusto
 // ══════════════════════════════════════════════
 function initApp(){
@@ -1578,6 +1723,11 @@ function initApp(){
   window._rdy = true;
   buildWt();
   onModChange();
+  loadSavedKey();
+  // Intentar cargar desde caché primero, luego Drive
+  const cached = localStorage.getItem('cap_tarifas_cache');
+  if(cached){ try{ parseTarifasCSV(cached); }catch(e){} }
+  loadTarifasFromDrive(true);
 }
 
 // Al cargar: verificar sesión existente, si no → mostrar login
