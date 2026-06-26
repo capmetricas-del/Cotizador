@@ -1168,39 +1168,47 @@ async function analizarImagen(){
 
   const DISTRITOS = Object.keys(ZONAS).sort().join(', ');
 
-  const prompt = `Eres un asistente experto en logística de comercio exterior peruano. Analiza este documento (puede ser correo, booking, B/L, proforma, carta, instrucción de embarque, etc.).
+  const prompt = `Eres un experto en logística de comercio exterior peruano. Analiza este documento (correo, booking, B/L, proforma, instrucción de embarque, solicitud de cotización, etc.) y extrae toda la información relevante.
 
-Tu tarea: extraer la información del envío Y detectar la dirección física mencionada en el documento (almacén, planta, domicilio del cliente, etc.) para identificar el distrito de Lima/Callao.
+═══ MODALIDAD ═══
+- Si menciona naviera, contenedor, FCL, LCL, buque, nave → "Maritimo"
+- Si menciona aerolínea, AWB, flete aéreo, vuelo, carga aérea → "Aereo"
+- LCL = carga consolidada marítima (sigue siendo "Maritimo")
 
-REGLAS PARA DETECTAR DIRECCIÓN:
-- Busca cualquier dirección física mencionada: "Av. ...", "Jr. ...", "Calle ...", "Urb. ...", "Almacén en ...", "Planta ...", "Domicilio: ...", etc.
-- Identifica a qué distrito de Lima/Callao pertenece esa dirección.
-- Pon la dirección completa en "direccion_local" y el distrito en "distrito_local".
-- Si hay dos direcciones distintas (una de origen y una de destino dentro de Lima), pon la más relevante.
+═══ NAVIERAS ═══
+- Lista todas las navieras mencionadas en "navieras" (array).
+- Mapea al nombre exacto de la lista. Si dice "Hapag" → "HAPAG LLOYD", "MSC" → "MSC DEL PERU", etc.
+- Si es Aereo, pon [] en navieras.
+- Lista válida: ${NAVIERAS.join(', ')}
 
-REGLAS PARA INCOTERM (solo para referencia, NO determines recojo/entrega aquí):
-- EXW, FCA, FOB = probablemente Exportación, la dirección es del exportador (recojo)
-- DDU, DAP, DPU = probablemente Importación, la dirección es del importador (entrega)
+═══ TIPO DE CARGA ═══
+- "20ST" = contenedor de 20 pies estándar (20', 20ft, TEU)
+- "40ST" = contenedor de 40 pies estándar (40', 40ft)
+- "40HC" = contenedor de 40 pies High Cube (40HC, 40HQ, 40 High)
+- "LCL" = carga consolidada / groupage / menos de un contenedor completo
+- Si el envío es AÉREO → siempre "LCL"
 
-Distritos válidos: ${DISTRITOS}
-Navieras válidas: ${NAVIERAS.join(', ')}
+═══ DIRECCIÓN LOCAL ═══
+- Busca cualquier dirección física en Lima/Callao: "Av.", "Jr.", "Calle", "Urb.", almacén, planta, domicilio.
+- Identifica el distrito de Lima/Callao al que pertenece.
+- Distritos válidos: ${DISTRITOS}
 
-Devuelve SOLO JSON válido sin markdown:
+Devuelve SOLO un JSON válido, sin markdown ni explicaciones:
 
 {
   "operacion": "Importacion" | "Exportacion" | null,
   "modalidad": "Maritimo" | "Aereo" | null,
   "incoterm": "EXW" | "FCA" | "FOB" | "DDU" | "DAP" | "DPU" | null,
-  "naviera": naviera exacta de la lista o null,
+  "navieras": ["NAVIERA1", "NAVIERA2"] (array, puede ser vacío []),
   "origen": ciudad/puerto de origen internacional o null,
   "destino": ciudad/puerto de destino internacional o null,
   "tipo_contenedor": "20ST" | "40ST" | "40HC" | "LCL" | null,
   "cantidad_cnt": número entero o null,
   "cantidad_bl": número entero o null,
-  "peso_kg": número o null,
+  "peso_kg": número (peso total en kg) o null,
   "valor_cif_usd": número o null,
-  "distrito_local": distrito de Lima/Callao encontrado en el documento o null,
-  "direccion_local": dirección completa encontrada en el documento o null
+  "distrito_local": distrito de Lima/Callao o null,
+  "direccion_local": dirección completa o null
 }`;
 
   // Preparar imagen: si es PDF, solo mandamos texto con aviso
@@ -1253,7 +1261,11 @@ Devuelve SOLO JSON válido sin markdown:
   }
 }
 
+// Último estado extraído (para re-aplicar con otra naviera)
+let _lastExtraccion = null;
+
 function aplicarExtraccion(d){
+  _lastExtraccion = d;
   let log = '<b>✅ Datos extraídos:</b><br>';
   let cnt = 0;
 
@@ -1273,7 +1285,19 @@ function aplicarExtraccion(d){
       el.value=val; log+=`• ${label}: <b>${val}</b><br>`; cnt++;
     }
   }
-
+  function setValSilent(id, val){
+    if(val===null||val===undefined||val==='') return false;
+    const el=document.getElementById(id);
+    if(!el) return false;
+    if(el.tagName==='SELECT'){
+      const opts=Array.from(el.options);
+      let m=opts.find(o=>o.value.toLowerCase()===String(val).toLowerCase());
+      if(!m) m=opts.find(o=>String(val).toLowerCase().includes(o.value.toLowerCase())
+                          || o.value.toLowerCase().includes(String(val).toLowerCase()));
+      if(m){ el.value=m.value; return true; }
+      return false;
+    } else { el.value=val; return true; }
+  }
   function setDistrito(id, distrito, label){
     if(!distrito) return false;
     const el=document.getElementById(id);
@@ -1287,67 +1311,94 @@ function aplicarExtraccion(d){
     return false;
   }
 
-  // ── 1. Modalidad → refresca incoterms disponibles ──
+  // ── 1. Modalidad → refresca incoterms ──
   if(d.modalidad){ setVal('s_mod', d.modalidad, 'Modalidad'); onModChange(); }
 
   // ── 2. Incoterm → refresca variante ──
   if(d.incoterm){ setVal('s_inc', d.incoterm, 'Incoterm'); onIncChange(); }
 
   // ── 3. Operación y datos del envío ──
-  if(d.operacion)       setVal('s_op',       d.operacion,       'Operación');
-  if(d.naviera)         setVal('s_nav',      d.naviera,         'Naviera');
-  if(d.origen)          setVal('s_ori',      d.origen,          'Origen internacional');
-  if(d.destino)         setVal('s_des',      d.destino,         'Destino internacional');
-  if(d.tipo_contenedor) setVal('s_cnt_tipo', d.tipo_contenedor, 'Tipo CNT');
-  if(d.cantidad_cnt)    setVal('s_cnt_qty',  d.cantidad_cnt,    'Cant. CNT');
-  if(d.cantidad_bl)     setVal('s_bl_qty',   d.cantidad_bl,     '# BL/AWB');
-  if(d.peso_kg)         setVal('s_peso_kg',  d.peso_kg,         'Peso KG');
-  if(d.valor_cif_usd)   setVal('s_valor',    d.valor_cif_usd,   'Valor CIF USD');
+  if(d.operacion)     setVal('s_op',      d.operacion,      'Operación');
+  if(d.origen)        setVal('s_ori',     d.origen,         'Origen internacional');
+  if(d.destino)       setVal('s_des',     d.destino,        'Destino internacional');
+  if(d.cantidad_bl)   setVal('s_bl_qty',  d.cantidad_bl,    '# BL/AWB');
+  if(d.peso_kg)       setVal('s_peso_kg', d.peso_kg,        'Peso KG');
+  if(d.valor_cif_usd) setVal('s_valor',   d.valor_cif_usd,  'Valor CIF USD');
 
-  // ── 4. LÓGICA DE DISTRITOS SEGÚN INCOTERM ──
-  //
-  //  INCOTERMS DE RECOJO (exportación / carga en origen):
-  //    EXW, FCA, FOB → la dirección del doc = RECOJO en almacén cliente
-  //                   → ENTREGA automática = CALLAO CERCADO (puerto)
-  //
-  //  INCOTERMS DE ENTREGA (importación / entrega en destino):
-  //    DDU, DAP, DPU → la dirección del doc = ENTREGA al consignatario
-  //                  → RECOJO automático = CALLAO CERCADO (terminal/depósito)
+  // ── 4. TIPO DE CARGA + tipo tarifa + moneda ──
+  const mod = gv('s_mod');
+  const tipoCnt = d.tipo_contenedor;
 
+  if(tipoCnt){ setVal('s_cnt_tipo', tipoCnt, 'Tipo de carga'); }
+
+  // Aéreo o LCL → tarifa por Peso KG
+  const esPesoKG = (mod==='Aereo') || (tipoCnt==='LCL');
+  if(esPesoKG){
+    // Tipo tarifa → Peso KG
+    setValSilent('s_tip_transp','Peso KG');
+    log+=`• Tipo tarifa transporte: <b>Peso KG</b> (${mod==='Aereo'?'Aéreo':'LCL'})<br>`; cnt++;
+    // Moneda → USD para aéreo, PEN para LCL
+    const moneda = mod==='Aereo' ? 'USD' : 'PEN';
+    setValSilent('s_mon_t', moneda);
+    log+=`• Moneda transporte: <b>${moneda}</b><br>`; cnt++;
+    // Para aéreo: tipo contenedor = LCL
+    if(mod==='Aereo'){
+      setValSilent('s_cnt_tipo','LCL');
+      log+=`• Tipo carga Aéreo → <b>LCL</b><br>`; cnt++;
+    }
+    // Cantidad CNT no aplica para LCL/Aéreo
+  } else {
+    // Maritimo FCL → tarifa por contenedor
+    const tipTrp = (tipoCnt==='20ST') ? 'CNT 20' : 'CNT 40';
+    setValSilent('s_tip_transp', tipTrp);
+    log+=`• Tipo tarifa transporte: <b>${tipTrp}</b><br>`; cnt++;
+    setValSilent('s_mon_t','PEN');
+    log+=`• Moneda transporte: <b>PEN</b><br>`; cnt++;
+    if(d.cantidad_cnt) setVal('s_cnt_qty', d.cantidad_cnt, 'Cant. CNT');
+  }
+
+  // ── 5. NAVIERA(S) ──
+  const navieras = Array.isArray(d.navieras) ? d.navieras.filter(Boolean) :
+                   (d.naviera ? [d.naviera] : []);
+
+  if(navieras.length===0){
+    log+=`• Naviera: <span style="color:var(--warn)">⚠ No detectada — selecciona manualmente</span><br>`;
+  } else if(navieras.length===1){
+    setVal('s_nav', navieras[0], 'Naviera');
+  } else {
+    // Múltiples navieras → aplicar la primera y mostrar selector
+    setValSilent('s_nav', navieras[0]);
+    log+=`• Navieras detectadas: <b>${navieras.join(', ')}</b><br>`;
+    log+=`<div style="margin:6px 0 2px;font-weight:700;font-size:11px;color:var(--p)">
+            Selecciona naviera para esta cotización:</div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px">
+            ${navieras.map(n=>`<button onclick="elegirNaviera('${n.replace(/'/g,"\\'")}',this)"
+              style="padding:5px 10px;font-size:12px;border:2px solid var(--p2);border-radius:6px;
+                     cursor:pointer;background:${n===navieras[0]?'var(--p2)':'#fff'};
+                     color:${n===navieras[0]?'#fff':'var(--p2)'};font-weight:600">${n}</button>`).join('')}
+          </div>`;
+    cnt++;
+  }
+
+  // ── 6. DISTRITOS según incoterm ──
   const inc = gv('s_inc');
   const CALLAO = 'CALLAO CERCADO';
-  const INC_RECOJO  = ['EXW','FCA','FOB'];   // la dirección del doc va en RECOJO
-  const INC_ENTREGA = ['DDU','DAP','DPU'];   // la dirección del doc va en ENTREGA
-
+  const INC_RECOJO  = ['EXW','FCA','FOB'];
+  const INC_ENTREGA = ['DDU','DAP','DPU'];
   const distrLoc = d.distrito_local || null;
   const dirLoc   = d.direccion_local || null;
 
   if(INC_RECOJO.includes(inc)){
-    // Dirección detectada → Distrito de Recojo
-    if(distrLoc){
-      setDistrito('s_dis_r', distrLoc, '🚚 Distrito de Recojo (del documento)');
-    } else if(dirLoc){
-      log+=`• 🚚 Dirección de recojo detectada: <i>${dirLoc}</i> — selecciona el distrito manualmente<br>`;
-    }
-    // Callao → Distrito de Entrega (puerto/terminal)
-    setDistrito('s_dis_e', CALLAO, '🏭 Distrito de Entrega → Puerto Callao');
-    log+=`<span style="font-size:11px;color:var(--mu)">ℹ️ Incoterm ${inc}: entrega automática en CALLAO (puerto de embarque)</span><br>`;
-
+    if(distrLoc) setDistrito('s_dis_r', distrLoc, '🚚 Dist. Recojo (del documento)');
+    else if(dirLoc) log+=`• 🚚 Dirección recojo: <i>${dirLoc}</i> — elige distrito manualmente<br>`;
+    setDistrito('s_dis_e', CALLAO, '🏭 Dist. Entrega → CALLAO (puerto embarque)');
   } else if(INC_ENTREGA.includes(inc)){
-    // Callao → Distrito de Recojo (terminal/depósito)
-    setDistrito('s_dis_r', CALLAO, '🏭 Distrito de Recojo → Puerto Callao');
-    log+=`<span style="font-size:11px;color:var(--mu)">ℹ️ Incoterm ${inc}: recojo automático desde CALLAO (terminal de descarga)</span><br>`;
-    // Dirección detectada → Distrito de Entrega
-    if(distrLoc){
-      setDistrito('s_dis_e', distrLoc, '📦 Distrito de Entrega (del documento)');
-    } else if(dirLoc){
-      log+=`• 📦 Dirección de entrega detectada: <i>${dirLoc}</i> — selecciona el distrito manualmente<br>`;
-    }
-
+    setDistrito('s_dis_r', CALLAO, '🏭 Dist. Recojo → CALLAO (terminal descarga)');
+    if(distrLoc) setDistrito('s_dis_e', distrLoc, '📦 Dist. Entrega (del documento)');
+    else if(dirLoc) log+=`• 📦 Dirección entrega: <i>${dirLoc}</i> — elige distrito manualmente<br>`;
   } else {
-    // Incoterm no reconocido o nulo: llenar lo que venga sin lógica automática
-    if(distrLoc) setDistrito('s_dis_r', distrLoc, '📍 Distrito detectado (recojo)');
-    if(dirLoc)   log+=`• 📍 Dirección detectada: <i>${dirLoc}</i><br>`;
+    if(distrLoc) setDistrito('s_dis_r', distrLoc, '📍 Distrito detectado');
+    if(dirLoc && !distrLoc) log+=`• 📍 Dirección: <i>${dirLoc}</i><br>`;
   }
 
   recalc();
@@ -1359,6 +1410,21 @@ function aplicarExtraccion(d){
     iaStatus(log,'#e8f5e9','#1b5e20');
     if(window.innerWidth<860) setTimeout(()=>showTab('r'),700);
   }
+}
+
+// Seleccionar una naviera del selector múltiple
+function elegirNaviera(nav, btn){
+  const el=document.getElementById('s_nav');
+  if(!el) return;
+  const opts=Array.from(el.options);
+  const m=opts.find(o=>o.value===nav||o.value.toLowerCase()===nav.toLowerCase());
+  if(m) el.value=m.value;
+  // Resaltar botón seleccionado
+  btn.closest('div').querySelectorAll('button').forEach(b=>{
+    b.style.background='#fff'; b.style.color='var(--p2)';
+  });
+  btn.style.background='var(--p2)'; btn.style.color='#fff';
+  recalc();
 }
 
 // Drag & drop en el área de drop
