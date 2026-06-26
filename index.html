@@ -1519,7 +1519,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ══════════════════════════════════════════════
 
 // ▼▼▼ PEGA AQUÍ TU URL DEL APPS SCRIPT (ver guía) ▼▼▼
-const AUTH_SCRIPT_URL = 'PEGAR_URL_APPS_SCRIPT_AQUI';
+const AUTH_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw8FPbC6pBVcoEziP6WqzsXbNbvS39KE_RDJHfHvDsm1ezqbCgpXT1T7UrdhHpmZzy3/exec';
 // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 // ── Google Sheets: base de costos ──────────────────────────────────────
@@ -1740,7 +1740,7 @@ function _parseTransporteLocal(csv){
       });
     }
     // TKG row: B y C son numéricos
-    else if(b&&!isNaN(parseFloat(b.replace(',','.')))&&parseFloat(b.replace(',','.')>0)){
+    else if(b&&!isNaN(parseFloat(b.replace(',','.')))&&parseFloat(b.replace(',','.'))>0){
       const mn=_pn(b), mx=_pn(c)||99999;
       const obj={a:mn,b:mx};
       ['ZONA 1','ZONA 2','ZONA 3','ZONA 4','ZONA 4 II'].forEach((z,i)=>{
