@@ -128,17 +128,93 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn-r{display:block;width:100%;padding:14px;background:var(--p);color:#fff;border:none;
        border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;margin-bottom:16px}
 @media(min-width:860px){.btn-r{display:none}}
+
+/* ── LOGIN OVERLAY ── */
+#login-overlay{
+  position:fixed;inset:0;z-index:9999;
+  background:linear-gradient(135deg,#1a4f7a 0%,#0d2b45 100%);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+}
+.login-box{
+  background:#fff;border-radius:16px;padding:32px 28px;
+  width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.4);
+}
+.login-logo{
+  text-align:center;margin-bottom:20px;
+}
+.login-logo .lmark{
+  width:64px;height:64px;background:var(--p);border-radius:14px;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:22px;font-weight:900;color:#fff;margin-bottom:8px;
+}
+.login-logo h2{font-size:20px;font-weight:800;color:var(--p);margin:0}
+.login-logo p{font-size:12px;color:var(--mu);margin-top:2px}
+.lfield{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.lfield label{font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.5px}
+.lfield input{border:1.5px solid var(--bd);border-radius:9px;padding:0 14px;
+  height:46px;font-size:15px;outline:none;width:100%;transition:border-color .15s}
+.lfield input:focus{border-color:var(--p2);box-shadow:0 0 0 3px rgba(36,113,163,.15)}
+#login-btn{
+  width:100%;padding:14px;background:var(--p);color:#fff;border:none;
+  border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;
+  transition:background .15s;
+}
+#login-btn:hover{background:var(--p2)}
+#login-btn:disabled{background:#aaa;cursor:not-allowed}
+#login-err{
+  display:none;background:#fce4ec;color:#c62828;border:1px solid #ef9a9a;
+  border-radius:8px;padding:9px 12px;font-size:13px;margin-top:10px;text-align:center;
+}
+#login-user-bar{
+  display:none;align-items:center;gap:8px;margin-left:auto;
+  font-size:12px;color:rgba(255,255,255,.85);
+}
+#login-user-bar span{font-weight:600}
+#login-user-bar button{
+  background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+  color:#fff;border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer;
+}
 </style>
 </head>
 <body>
+
+<!-- ══ LOGIN OVERLAY ══ -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="lmark">CAP</div>
+      <h2>CAP Logistic</h2>
+      <p>Sistema de Cotización · Acceso interno</p>
+    </div>
+    <div class="lfield">
+      <label>Usuario</label>
+      <input id="l_user" type="text" placeholder="tu usuario" autocomplete="username"
+        onkeydown="if(event.key==='Enter')document.getElementById('l_pass').focus()">
+    </div>
+    <div class="lfield">
+      <label>Contraseña</label>
+      <input id="l_pass" type="password" placeholder="••••••••" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button id="login-btn" onclick="doLogin()">Ingresar →</button>
+    <div id="login-err"></div>
+    <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--mu)">
+      ¿Problemas para ingresar? Contacta al administrador.
+    </div>
+  </div>
+</div>
 
 <div class="hdr">
   <div class="logo">CAP</div>
   <div>
     <h1>CAP Logistic · Cotizador</h1>
-    <div class="sub">v2.5 · offline</div>
+    <div class="sub">v2.4 · offline</div>
   </div>
   <div class="hdr-acts">
+    <div id="login-user-bar">
+      <span id="login-user-name"></span>
+      <button onclick="doLogout()">Salir</button>
+    </div>
     <button class="ibtn" onclick="exportCSV()">⬇ CSV</button>
     <button class="ibtn" onclick="window.print()">🖨</button>
   </div>
@@ -1471,6 +1547,86 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 // ══════════════════════════════════════════════
+// AUTH — Login con Google Sheets via Apps Script
+// ══════════════════════════════════════════════
+
+// ▼▼▼ PEGA AQUÍ TU URL DEL APPS SCRIPT (ver guía) ▼▼▼
+const AUTH_SCRIPT_URL = 'PEGAR_URL_APPS_SCRIPT_AQUI';
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+const SESSION_KEY = 'cap_auth_session';
+
+function checkSession(){
+  try{
+    const s = JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');
+    if(s && s.ok && s.exp > Date.now()){
+      showApp(s.nombre||s.usuario);
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+
+async function doLogin(){
+  const user = document.getElementById('l_user').value.trim();
+  const pass = document.getElementById('l_pass').value;
+  const btn  = document.getElementById('login-btn');
+  const err  = document.getElementById('login-err');
+
+  if(!user||!pass){ showErr('Ingresa usuario y contraseña.'); return; }
+
+  btn.disabled=true; btn.textContent='Verificando...';
+  err.style.display='none';
+
+  // Si el URL del script no está configurado → modo desarrollo (acepta cualquier login)
+  if(!AUTH_SCRIPT_URL || AUTH_SCRIPT_URL.includes('PEGAR_URL')){
+    showApp(user);
+    btn.disabled=false; btn.textContent='Ingresar →';
+    return;
+  }
+
+  try{
+    const url = `${AUTH_SCRIPT_URL}?user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}`;
+    const resp = await fetch(url, {method:'GET', redirect:'follow'});
+    const data = await resp.json();
+
+    if(data.ok){
+      // Guardar sesión por 8 horas
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+        ok:true, usuario:user, nombre:data.nombre||user,
+        exp: Date.now() + 8*60*60*1000
+      }));
+      showApp(data.nombre||user);
+    } else {
+      showErr(data.msg || 'Usuario o contraseña incorrectos.');
+    }
+  } catch(e){
+    showErr('No se pudo conectar. Verifica tu conexión o la URL del script.');
+  } finally {
+    btn.disabled=false; btn.textContent='Ingresar →';
+  }
+}
+
+function showApp(nombre){
+  document.getElementById('login-overlay').style.display='none';
+  const bar=document.getElementById('login-user-bar');
+  bar.style.display='flex';
+  document.getElementById('login-user-name').textContent='👤 '+nombre;
+  // Inicializar app si aún no se hizo
+  initApp();
+}
+
+function showErr(msg){
+  const el=document.getElementById('login-err');
+  el.textContent=msg; el.style.display='block';
+}
+
+function doLogout(){
+  sessionStorage.removeItem(SESSION_KEY);
+  location.reload();
+}
+
+// ══════════════════════════════════════════════
 // INIT — robusto
 // ══════════════════════════════════════════════
 function initApp(){
@@ -1480,13 +1636,19 @@ function initApp(){
   onModChange();
   loadSavedKey();
 }
+
+// Al cargar: verificar sesión existente, si no → mostrar login
 if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded', initApp);
+  document.addEventListener('DOMContentLoaded', ()=>{ if(!checkSession()) _setupLoginEnter(); });
 } else {
-  initApp();
+  if(!checkSession()) _setupLoginEnter();
 }
-window.addEventListener('load', initApp);
-setTimeout(initApp, 250);
+window.addEventListener('load', ()=>{ if(!checkSession()){} });
+
+function _setupLoginEnter(){
+  // Enfocar campo usuario al abrir
+  setTimeout(()=>{ const u=document.getElementById('l_user'); if(u)u.focus(); },100);
+}
 </script>
 </body>
 </html>
