@@ -136,7 +136,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="logo">CAP</div>
   <div>
     <h1>CAP Logistic · Cotizador</h1>
-    <div class="sub">v2.4 · offline</div>
+    <div class="sub">v2.3 · offline</div>
   </div>
   <div class="hdr-acts">
     <button class="ibtn" onclick="exportCSV()">⬇ CSV</button>
@@ -1170,46 +1170,75 @@ async function analizarImagen(){
 
   const prompt = `Eres un experto en logística de comercio exterior peruano. Analiza este documento (correo, booking, B/L, proforma, instrucción de embarque, solicitud de cotización, etc.) y extrae toda la información relevante.
 
+═══ OPERACIÓN ═══
+- "Importacion" si el destino es Perú / Lima / Callao, o menciona "import", "aduana de importación", "customs clearance", "despacho de importación", "delivery in Peru".
+- "Exportacion" si el origen es Perú o menciona "export", "embarque desde Lima/Callao".
+
+═══ INCOTERM ═══
+Si el incoterm está escrito explícitamente (EXW, FOB, DAP, etc.) úsalo directamente.
+Si NO está escrito, infiere según el SERVICIO SOLICITADO y el CONTEXTO:
+
+  → "DDU" o "DAP" si:
+    - Pide "local delivery", "delivery service", "entrega a domicilio", "last mile"
+    - Pide "customs clearance + delivery" o "customs clearance and local delivery"
+    - Hay una dirección de entrega final al consignatario en Lima/Callao
+    - El destino final es un almacén o domicilio dentro de Lima
+    - Importación con entrega incluida
+
+  → "EXW" o "FCA" si:
+    - Pide "pickup", "recojo", "collection from warehouse"
+    - La dirección mencionada es la del exportador/shipper (origen de la carga)
+    - Exportación con recojo en planta o almacén
+
+  → "FOB" si:
+    - Menciona "free on board", carga puesta en puerto sin flete internacional
+
+  IMPORTANTE: Si hay una dirección de entrega final en Lima (Final Address, Consignee Address, Delivery Address) y piden "delivery" → es DAP o DDU. NO pongas EXW en ese caso.
+
 ═══ MODALIDAD ═══
-- Si menciona naviera, contenedor, FCL, LCL, buque, nave → "Maritimo"
-- Si menciona aerolínea, AWB, flete aéreo, vuelo, carga aérea → "Aereo"
-- LCL = carga consolidada marítima (sigue siendo "Maritimo")
+- Naviera, contenedor, FCL, LCL, buque, B/L → "Maritimo"
+- Aerolínea, AWB, flete aéreo, vuelo, airway → "Aereo"
+- Sin mención clara → inferir por peso/volumen: si hay CBM o KGS sin contenedor → "Maritimo" LCL
 
 ═══ NAVIERAS ═══
-- Lista todas las navieras mencionadas en "navieras" (array).
-- Mapea al nombre exacto de la lista. Si dice "Hapag" → "HAPAG LLOYD", "MSC" → "MSC DEL PERU", etc.
-- Si es Aereo, pon [] en navieras.
+- Lista TODAS las navieras mencionadas en el array "navieras".
+- Mapea exactamente: "Hapag" → "HAPAG LLOYD", "MSC" → "MSC DEL PERU", "CMA CGM" → "CMA - CGM", etc.
 - Lista válida: ${NAVIERAS.join(', ')}
 
 ═══ TIPO DE CARGA ═══
-- "20ST" = contenedor de 20 pies estándar (20', 20ft, TEU)
-- "40ST" = contenedor de 40 pies estándar (40', 40ft)
-- "40HC" = contenedor de 40 pies High Cube (40HC, 40HQ, 40 High)
-- "LCL" = carga consolidada / groupage / menos de un contenedor / sin mención de contenedor
-- Si el envío es AÉREO → siempre "LCL"
-- Si NO se menciona ningún tipo de contenedor específico → "LCL" (nunca dejes null aquí)
+- "20ST" = 20 pies estándar (20', 20ft, 1 TEU)
+- "40ST" = 40 pies estándar (40', 40ft)
+- "40HC" = 40 pies High Cube (40HC, 40HQ, 40 High)
+- "LCL" = consolidada, groupage, carga suelta, CBM sin contenedor completo, o si no se menciona contenedor
+- Aéreo → siempre "LCL"
+- Sin contenedor explícito → "LCL"
 
-═══ DIRECCIÓN LOCAL ═══
-- Busca cualquier dirección física en Lima/Callao: "Av.", "Jr.", "Calle", "Urb.", almacén, planta, domicilio.
-- Identifica el distrito de Lima/Callao al que pertenece.
+═══ PESO ═══
+- Usa el peso BRUTO (G.W., Gross Weight) si hay varios pesos.
+- Si dice "502 KGS / 582 KGS" (neto/bruto) → usa 582 (el mayor = bruto).
+
+═══ DIRECCIÓN LOCAL (en Lima/Callao) ═══
+- Busca "Final Address", "Consignee", "Delivery Address", "Shipper Address", cualquier dirección en Lima/Callao.
+- Identifica el DISTRITO exacto (ej: "VILLA EL SALVADOR", "MIRAFLORES", "CALLAO").
+- Si el distrito no está claro, extrae el texto de la dirección como "direccion_local".
 - Distritos válidos: ${DISTRITOS}
 
-Devuelve SOLO un JSON válido, sin markdown ni explicaciones:
+Devuelve SOLO JSON válido, sin markdown ni comentarios:
 
 {
   "operacion": "Importacion" | "Exportacion" | null,
   "modalidad": "Maritimo" | "Aereo" | null,
   "incoterm": "EXW" | "FCA" | "FOB" | "DDU" | "DAP" | "DPU" | null,
-  "navieras": ["NAVIERA1", "NAVIERA2"] (array, puede ser vacío []),
+  "navieras": [] (array de navieras exactas de la lista),
   "origen": ciudad/puerto de origen internacional o null,
   "destino": ciudad/puerto de destino internacional o null,
-  "tipo_contenedor": "20ST" | "40ST" | "40HC" | "LCL" | null,
+  "tipo_contenedor": "20ST" | "40ST" | "40HC" | "LCL",
   "cantidad_cnt": número entero o null,
   "cantidad_bl": número entero o null,
-  "peso_kg": número (peso total en kg) o null,
+  "peso_kg": peso bruto en kg (número) o null,
   "valor_cif_usd": número o null,
   "distrito_local": distrito de Lima/Callao o null,
-  "direccion_local": dirección completa o null
+  "direccion_local": dirección completa encontrada o null
 }`;
 
   // Preparar imagen: si es PDF, solo mandamos texto con aviso
